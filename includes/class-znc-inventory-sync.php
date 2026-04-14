@@ -1,144 +1,78 @@
 <?php
-/**
- * Inventory Sync — stock deduction + retry queue with cron fallback.
- *
- * @package ZincklesNetCart
- * @since   1.0.0
- */
-
 defined( 'ABSPATH' ) || exit;
 
 class ZNC_Inventory_Sync {
 
-    public function init() {
-        if ( ! wp_next_scheduled( 'znc_inventory_retry' ) ) {
-            wp_schedule_event( time(), 'every_five_minutes', 'znc_inventory_retry' );
+    public static function init() {
+        add_action( 'znc_inventory_retry_cron', array( __CLASS__, 'process_retry_queue' ) );
+        if ( ! wp_next_scheduled( 'znc_inventory_retry_cron' ) ) {
+            wp_schedule_event( time(), 'every_five_minutes', 'znc_inventory_retry_cron' );
         }
-        add_action( 'znc_inventory_retry', array( $this, 'process_retry_queue' ) );
-
-        // Register custom cron interval.
-        add_filter( 'cron_schedules', array( $this, 'add_cron_interval' ) );
+        add_filter( 'cron_schedules', array( __CLASS__, 'add_cron_interval' ) );
     }
 
-    public function add_cron_interval( $schedules ) {
+    public static function add_cron_interval( $schedules ) {
         $schedules['every_five_minutes'] = array(
             'interval' => 300,
-            'display'  => __( 'Every 5 Minutes', 'znc' ),
+            'display'  => 'Every 5 Minutes',
         );
         return $schedules;
     }
 
-    /**
-     * Deduct inventory for all shops in a checkout.
-     */
-    public function deduct_all( $shops ) {
-        $results = array();
+    public static function deduct_stock( $blog_id, $items ) {
+        $blog_id = (int) $blog_id;
+        $current = get_current_blog_id();
+        $need_switch = ( $current !== $blog_id );
 
-        foreach ( $shops as $shop ) {
-            $blog_id = $shop['blog_id'];
+        if ( $need_switch ) switch_to_blog( $blog_id );
 
-            switch_to_blog( $blog_id );
+        $failed = array();
+        foreach ( $items as $item ) {
+            $product = wc_get_product( $item['variation_id'] ?: $item['product_id'] );
+            if ( ! $product || ! $product->managing_stock() ) continue;
 
-            foreach ( $shop['items'] as $item ) {
-                $product = function_exists( 'wc_get_product' )
-                    ? wc_get_product( $item['variation_id'] ?: $item['product_id'] )
-                    : null;
-
-                if ( ! $product ) {
-                    $this->queue_retry( $blog_id, $item );
-                    $results[] = array(
-                        'blog_id'    => $blog_id,
-                        'product_id' => $item['product_id'],
-                        'success'    => false,
-                        'queued'     => true,
-                    );
-                    continue;
-                }
-
-                if ( $product->managing_stock() ) {
-                    $new_stock = wc_update_product_stock( $product, $item['quantity'], 'decrease' );
-                    if ( is_wp_error( $new_stock ) ) {
-                        $this->queue_retry( $blog_id, $item );
-                        $results[] = array(
-                            'blog_id'    => $blog_id,
-                            'product_id' => $item['product_id'],
-                            'success'    => false,
-                            'queued'     => true,
-                        );
-                    } else {
-                        $results[] = array(
-                            'blog_id'    => $blog_id,
-                            'product_id' => $item['product_id'],
-                            'success'    => true,
-                            'new_stock'  => $new_stock,
-                        );
-                    }
-                } else {
-                    $results[] = array(
-                        'blog_id'    => $blog_id,
-                        'product_id' => $item['product_id'],
-                        'success'    => true,
-                        'message'    => 'Stock not managed.',
-                    );
-                }
+            $result = wc_update_product_stock( $product, $item['quantity'], 'decrease' );
+            if ( $result === false || is_wp_error( $result ) ) {
+                $failed[] = $item;
             }
-
-            restore_current_blog();
         }
 
-        return $results;
+        if ( $need_switch ) restore_current_blog();
+
+        if ( ! empty( $failed ) ) {
+            self::add_to_retry_queue( $blog_id, $failed );
+        }
+
+        return empty( $failed );
     }
 
-    /**
-     * Queue a failed deduction for retry.
-     */
-    private function queue_retry( $blog_id, $item ) {
+    private static function add_to_retry_queue( $blog_id, $items ) {
         $queue = get_site_option( 'znc_inventory_retry_queue', array() );
         $queue[] = array(
-            'blog_id'      => $blog_id,
-            'product_id'   => $item['product_id'],
-            'variation_id' => $item['variation_id'] ?? 0,
-            'quantity'     => $item['quantity'],
-            'attempts'     => 0,
-            'queued_at'    => current_time( 'timestamp' ),
+            'blog_id'  => $blog_id,
+            'items'    => $items,
+            'attempts' => 0,
+            'added_at' => time(),
         );
         update_site_option( 'znc_inventory_retry_queue', $queue );
     }
 
-    /**
-     * Process the retry queue (called by cron).
-     */
-    public function process_retry_queue() {
-        $queue    = get_site_option( 'znc_inventory_retry_queue', array() );
-        $settings = get_site_option( 'znc_network_settings', array() );
-        $max      = absint( $settings['inventory_retry_max'] ?? 5 );
-        $remaining = array();
+    public static function process_retry_queue() {
+        $queue = get_site_option( 'znc_inventory_retry_queue', array() );
+        if ( empty( $queue ) ) return;
 
+        $remaining = array();
         foreach ( $queue as $entry ) {
-            if ( $entry['attempts'] >= $max ) {
-                do_action( 'znc_inventory_retry_failed', $entry );
+            if ( $entry['attempts'] >= 5 ) {
+                error_log( '[ZNC] Inventory sync failed after 5 attempts for blog ' . $entry['blog_id'] );
                 continue;
             }
 
-            switch_to_blog( $entry['blog_id'] );
-
-            $product = function_exists( 'wc_get_product' )
-                ? wc_get_product( $entry['variation_id'] ?: $entry['product_id'] )
-                : null;
-
-            if ( $product && $product->managing_stock() ) {
-                $result = wc_update_product_stock( $product, $entry['quantity'], 'decrease' );
-                restore_current_blog();
-
-                if ( ! is_wp_error( $result ) ) {
-                    continue; // Success — don't re-queue.
-                }
-            } else {
-                restore_current_blog();
+            $success = self::deduct_stock( $entry['blog_id'], $entry['items'] );
+            if ( ! $success ) {
+                $entry['attempts']++;
+                $remaining[] = $entry;
             }
-
-            $entry['attempts']++;
-            $remaining[] = $entry;
         }
 
         update_site_option( 'znc_inventory_retry_queue', $remaining );

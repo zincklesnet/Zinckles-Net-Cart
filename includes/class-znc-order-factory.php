@@ -1,173 +1,102 @@
 <?php
-/**
- * Order Factory — creates parent + child orders with mapping table.
- *
- * @package ZincklesNetCart
- * @since   1.0.0
- */
-
 defined( 'ABSPATH' ) || exit;
 
 class ZNC_Order_Factory {
 
-    public function init() {
-        // No hooks — invoked by checkout orchestrator.
-    }
+    public static function init() {}
 
-    /**
-     * Create the parent order on the main site.
-     */
-    public function create_parent_order( $user_id, $shops, $checkout_data ) {
+    public static function create_parent_order( $user_id, $items, $totals, $mycred_deductions = array() ) {
         if ( ! function_exists( 'wc_create_order' ) ) {
-            return new WP_Error( 'wc_missing', 'WooCommerce is required on the main site.' );
+            return new WP_Error( 'no_wc', 'WooCommerce not available on checkout host.' );
         }
 
-        $order = wc_create_order( array(
-            'customer_id' => $user_id,
-            'status'      => 'processing',
-        ) );
+        $order = wc_create_order( array( 'customer_id' => $user_id ) );
+        if ( is_wp_error( $order ) ) return $order;
 
-        if ( is_wp_error( $order ) ) {
-            return $order;
+        foreach ( $items as $item ) {
+            $fee = new WC_Order_Item_Fee();
+            $fee->set_name( sprintf( '[%s] %s (x%d)', $item['shop_name'], $item['product_name'], $item['quantity'] ) );
+            $fee->set_total( (float) $item['product_price'] * (int) $item['quantity'] );
+            $fee->add_meta_data( '_znc_source_blog_id', $item['source_blog_id'] );
+            $fee->add_meta_data( '_znc_product_id', $item['product_id'] );
+            $fee->add_meta_data( '_znc_variation_id', $item['variation_id'] );
+            $fee->add_meta_data( '_znc_quantity', $item['quantity'] );
+            $fee->add_meta_data( '_znc_unit_price', $item['product_price'] );
+            $fee->add_meta_data( '_znc_currency', $item['currency'] );
+            $fee->add_meta_data( '_znc_shop_name', $item['shop_name'] );
+            $fee->add_meta_data( '_znc_product_sku', $item['product_sku'] );
+            $order->add_item( $fee );
         }
 
-        // Add line items from all shops.
-        foreach ( $shops as $shop ) {
-            foreach ( $shop['items'] as $item ) {
-                $order->add_item( new WC_Order_Item_Product( array(
-                    'name'     => sprintf( '[%s] %s', $shop['shop_name'], $item['product_name'] ),
-                    'quantity' => $item['quantity'],
-                    'subtotal' => $item['line_total'],
-                    'total'    => $item['line_total'],
-                ) ) );
-            }
-        }
+        $order->set_currency( $totals['base_currency'] );
+        $order->set_total( $totals['converted_total'] );
 
-        // Set order meta.
-        $order->update_meta_data( '_znc_order_type', 'parent' );
-        $order->update_meta_data( '_znc_totals', $checkout_data['totals'] ?? array() );
-        $order->update_meta_data( '_znc_zcred_deductions', $checkout_data['zcred_deductions'] ?? array() );
-        $order->update_meta_data( '_znc_mycred_results', $checkout_data['mycred_results'] ?? array() );
-        $order->update_meta_data( '_znc_monetary_total', $checkout_data['monetary_total'] ?? 0 );
-        $order->update_meta_data( '_znc_shop_count', count( $shops ) );
+        $order->update_meta_data( '_znc_is_parent', 'yes' );
+        $order->update_meta_data( '_znc_totals', $totals );
+        $order->update_meta_data( '_znc_mycred_deductions', $mycred_deductions );
 
-        if ( ! empty( $checkout_data['payment_method'] ) ) {
-            $order->set_payment_method( $checkout_data['payment_method'] );
-        }
-
-        $order->set_currency( $checkout_data['totals']['base_currency'] ?? 'CAD' );
-        $order->set_total( $checkout_data['monetary_total'] ?? 0 );
-
-        // Billing/shipping.
-        if ( ! empty( $checkout_data['billing'] ) ) {
-            foreach ( $checkout_data['billing'] as $key => $val ) {
-                $setter = 'set_billing_' . $key;
-                if ( method_exists( $order, $setter ) ) {
-                    $order->$setter( $val );
-                }
-            }
-        }
-
-        $order->add_order_note( sprintf(
-            'Net Cart parent order — %d shops, %s currency mode.',
-            count( $shops ),
-            ( $checkout_data['totals']['is_mixed'] ?? false ) ? 'mixed' : 'single'
-        ) );
-
+        $order->update_status( 'processing', 'Zinckles Net Cart parent order.' );
         $order->save();
 
-        return array(
-            'order_id' => $order->get_id(),
-            'total'    => $order->get_total(),
-            'status'   => $order->get_status(),
-        );
+        return $order->get_id();
     }
 
-    /**
-     * Create child orders on each subsite via switch_to_blog.
-     */
-    public function create_child_orders( $parent_order_id, $user_id, $shops ) {
+    public static function create_child_orders( $parent_order_id, $user_id, $grouped ) {
+        global $wpdb;
+        $host    = new ZNC_Checkout_Host();
+        $host_id = $host->get_host_id();
         $results = array();
 
-        global $wpdb;
-        $map_table = $wpdb->prefix . 'znc_order_map';
+        foreach ( $grouped as $blog_id => $group ) {
+            $blog_id = (int) $blog_id;
+            if ( $blog_id === $host_id ) continue;
 
-        foreach ( $shops as $shop ) {
-            $blog_id = $shop['blog_id'];
+            $current     = get_current_blog_id();
+            $need_switch = ( $current !== $blog_id );
 
-            switch_to_blog( $blog_id );
+            if ( $need_switch ) switch_to_blog( $blog_id );
 
-            if ( ! function_exists( 'wc_create_order' ) ) {
-                restore_current_blog();
-                $results[] = array(
-                    'blog_id' => $blog_id,
-                    'success' => false,
-                    'error'   => 'WooCommerce not active.',
-                );
-                continue;
-            }
+            if ( function_exists( 'wc_create_order' ) ) {
+                $child = wc_create_order( array( 'customer_id' => $user_id ) );
 
-            $child_order = wc_create_order( array(
-                'customer_id' => $user_id,
-                'status'      => 'processing',
-            ) );
+                if ( ! is_wp_error( $child ) ) {
+                    foreach ( $group['items'] as $item ) {
+                        $product = wc_get_product( $item['variation_id'] ?: $item['product_id'] );
+                        if ( $product ) {
+                            $child->add_product( $product, $item['quantity'] );
+                        }
+                    }
 
-            if ( is_wp_error( $child_order ) ) {
-                restore_current_blog();
-                $results[] = array(
-                    'blog_id' => $blog_id,
-                    'success' => false,
-                    'error'   => $child_order->get_error_message(),
-                );
-                continue;
-            }
+                    $child->set_currency( $group['currency'] );
+                    $child->calculate_totals();
+                    $child->update_meta_data( '_znc_parent_order_id', $parent_order_id );
+                    $child->update_meta_data( '_znc_parent_blog_id', $host_id );
+                    $child->update_status( 'processing', 'Zinckles Net Cart child order.' );
+                    $child->save();
 
-            $subtotal = 0;
-            foreach ( $shop['items'] as $item ) {
-                $product = wc_get_product( $item['variation_id'] ?: $item['product_id'] );
-                if ( $product ) {
-                    $child_order->add_product( $product, $item['quantity'], array(
-                        'subtotal' => $item['line_total'],
-                        'total'    => $item['line_total'],
-                    ) );
+                    $child_id = $child->get_id();
+                    $results[ $blog_id ] = $child_id;
                 }
-                $subtotal += $item['line_total'];
             }
 
-            $child_order->set_currency( $shop['currency'] );
-            $child_order->calculate_totals();
-            $child_order->update_meta_data( '_znc_order_type', 'child' );
-            $child_order->update_meta_data( '_znc_parent_order_id', $parent_order_id );
-            $child_order->update_meta_data( '_znc_parent_site_id', get_main_site_id() );
-            $child_order->add_order_note( sprintf(
-                'Net Cart child order — parent #%d on main site.',
-                $parent_order_id
-            ) );
-            $child_order->save();
+            if ( $need_switch ) restore_current_blog();
 
-            $child_id = $child_order->get_id();
+            /* Record in order map */
+            if ( isset( $child_id ) ) {
+                $map_current = get_current_blog_id();
+                $map_switch  = ( $map_current !== $host_id );
+                if ( $map_switch ) switch_to_blog( $host_id );
 
-            restore_current_blog();
+                $wpdb->insert( $wpdb->prefix . 'znc_order_map', array(
+                    'parent_order_id' => $parent_order_id,
+                    'child_order_id'  => $child_id,
+                    'child_blog_id'   => $blog_id,
+                    'status'          => 'processing',
+                    'created_at'      => current_time( 'mysql', true ),
+                ) );
 
-            // Record in order map on main site.
-            $wpdb->insert( $map_table, array(
-                'parent_order_id' => $parent_order_id,
-                'child_order_id'  => $child_id,
-                'child_blog_id'   => $blog_id,
-                'currency'        => $shop['currency'],
-                'subtotal'        => $subtotal,
-                'status'          => 'processing',
-                'created_at'      => current_time( 'mysql' ),
-            ) );
-
-            $results[] = array(
-                'blog_id'        => $blog_id,
-                'shop_name'      => $shop['shop_name'],
-                'child_order_id' => $child_id,
-                'currency'       => $shop['currency'],
-                'subtotal'       => $subtotal,
-                'success'        => true,
-            );
+                if ( $map_switch ) restore_current_blog();
+            }
         }
 
         return $results;

@@ -1,0 +1,8 @@
+/* Zinckles Net Cart — Admin Styles v1.3.1 */
+.znc-badge{display:inline-block;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:600;line-height:1.4}
+.znc-badge-success{background:#d4edda;color:#155724}
+.znc-badge-warning{background:#fff3cd;color:#856404}
+.znc-badge-neutral{background:#e2e3e5;color:#383d41}
+.znc-badge-host{background:#cce5ff;color:#004085;margin-left:6px}
+#znc-subsites-table .button{margin-right:4px}
+#znc-subsites-table tr{transition:background-color .3s ease}

@@ -1,109 +1,69 @@
 <?php
-/**
- * Currency Handler — mixed-currency detection, conversion, and parallel totals.
- *
- * @package ZincklesNetCart
- * @since   1.0.0
- */
-
 defined( 'ABSPATH' ) || exit;
 
 class ZNC_Currency_Handler {
 
-    /** Fallback exchange rates (to USD). */
-    private static $fallback_rates = array(
-        'USD' => 1.0,
-        'CAD' => 0.74,
-        'EUR' => 1.08,
-        'GBP' => 1.27,
-        'AUD' => 0.65,
-        'JPY' => 0.0067,
-    );
+    private static $rates = null;
 
-    public function init() {
-        add_filter( 'znc_currency_rates', array( $this, 'get_rates' ) );
+    public static function init() {}
+
+    public static function get_base_currency() {
+        $settings = get_site_option( 'znc_network_settings', array() );
+        return $settings['base_currency'] ?? 'USD';
     }
 
-    /**
-     * Check if a cart contains multiple currencies.
-     */
-    public function is_mixed( $items ) {
+    public static function is_mixed_cart( $user_id ) {
+        $items      = ZNC_Global_Cart_Store::get_cart( $user_id );
         $currencies = array_unique( array_column( $items, 'currency' ) );
         return count( $currencies ) > 1;
     }
 
-    /**
-     * Calculate parallel totals — per-currency subtotals + unified converted total.
-     */
-    public function parallel_totals( $items, $base_currency = null ) {
-        if ( ! $base_currency ) {
-            $settings      = get_site_option( 'znc_network_settings', array() );
-            $base_currency = $settings['base_currency'] ?? 'CAD';
-        }
+    public static function get_exchange_rates() {
+        if ( self::$rates !== null ) return self::$rates;
 
-        $per_currency   = array();
-        $converted_total = 0.0;
-
-        foreach ( $items as $item ) {
-            $currency   = $item['currency'] ?? $base_currency;
-            $line_total = (float) ( $item['line_total'] ?? 0 );
-
-            if ( ! isset( $per_currency[ $currency ] ) ) {
-                $per_currency[ $currency ] = 0.0;
-            }
-            $per_currency[ $currency ] += $line_total;
-
-            $converted_total += $this->convert( $line_total, $currency, $base_currency );
-        }
-
-        return array(
-            'base_currency'    => $base_currency,
-            'is_mixed'         => count( $per_currency ) > 1,
-            'per_currency'     => $per_currency,
-            'converted_total'  => round( $converted_total, 2 ),
-        );
-    }
-
-    /**
-     * Convert an amount from one currency to another.
-     */
-    public function convert( $amount, $from, $to ) {
-        if ( $from === $to ) {
-            return $amount;
-        }
-
-        $rates   = $this->get_rates();
-        $from_rate = $rates[ $from ] ?? 1.0;
-        $to_rate   = $rates[ $to ] ?? 1.0;
-
-        // Convert to USD base, then to target.
-        $usd_amount = $amount * $from_rate;
-        return $usd_amount / $to_rate;
-    }
-
-    /**
-     * Get exchange rates. Uses saved rates, falls back to hardcoded.
-     */
-    public function get_rates() {
         $settings = get_site_option( 'znc_network_settings', array() );
-        $saved    = get_site_option( 'znc_exchange_rates', array() );
+        $custom   = $settings['exchange_rates'] ?? array();
 
-        if ( ! empty( $saved ) ) {
-            return wp_parse_args( $saved, self::$fallback_rates );
-        }
+        self::$rates = array_merge( array(
+            'USD' => 1.00, 'EUR' => 1.08, 'GBP' => 1.27, 'CAD' => 0.74,
+            'AUD' => 0.65, 'JPY' => 0.0067, 'CHF' => 1.13, 'CNY' => 0.14,
+            'INR' => 0.012, 'BRL' => 0.20, 'MXN' => 0.058, 'KRW' => 0.00075,
+            'SEK' => 0.096, 'NOK' => 0.094, 'DKK' => 0.145, 'NZD' => 0.61,
+            'SGD' => 0.75, 'HKD' => 0.13, 'ZAR' => 0.055, 'TRY' => 0.031,
+        ), $custom );
 
-        return self::$fallback_rates;
+        return self::$rates;
     }
 
-    /**
-     * Format a price with currency symbol.
-     */
-    public function format( $amount, $currency ) {
-        $symbols = array(
-            'USD' => '$', 'CAD' => 'C$', 'EUR' => '€',
-            'GBP' => '£', 'AUD' => 'A$', 'JPY' => '¥',
-        );
-        $symbol = $symbols[ $currency ] ?? $currency . ' ';
-        return $symbol . number_format( $amount, 2 );
+    public static function convert( $amount, $from, $to ) {
+        if ( $from === $to ) return $amount;
+        $rates    = self::get_exchange_rates();
+        $from_usd = ( $rates[ $from ] ?? 1 );
+        $to_usd   = ( $rates[ $to ] ?? 1 );
+        return round( $amount * $from_usd / $to_usd, 2 );
+    }
+
+    public static function parallel_totals( $user_id ) {
+        $grouped = ZNC_Global_Cart_Store::get_cart_grouped( $user_id );
+        $base    = self::get_base_currency();
+        $totals  = array( 'per_currency' => array(), 'converted_total' => 0 );
+
+        foreach ( $grouped as $blog_id => $group ) {
+            $currency  = $group['currency'];
+            $subtotal  = 0;
+
+            foreach ( $group['items'] as $item ) {
+                $subtotal += (float) $item['product_price'] * (int) $item['quantity'];
+            }
+
+            if ( ! isset( $totals['per_currency'][ $currency ] ) ) {
+                $totals['per_currency'][ $currency ] = 0;
+            }
+            $totals['per_currency'][ $currency ] += $subtotal;
+            $totals['converted_total'] += self::convert( $subtotal, $currency, $base );
+        }
+
+        $totals['base_currency'] = $base;
+        return $totals;
     }
 }
