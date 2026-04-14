@@ -1,217 +1,251 @@
 <?php
 /**
- * Cart Snapshot — captures WooCommerce add-to-cart on enrolled subsites
- * and writes directly to the global cart table on the checkout host.
+ * Cart Snapshot Builder (runs on each subsite).
  *
- * v1.3.1 FIX: Uses direct DB write via switch_to_blog() instead of HTTP REST.
- * Only switches to host blog for the single INSERT — no WC reinitialization.
- * Recursion guard prevents infinite loops.
+ * v1.2.0 FIX: Auto-pushes cart items to the main site's global cart
+ * whenever a product is added/updated/removed on ANY enrolled subsite.
+ * This ensures the global cart always reflects the aggregate of all shops.
  *
  * @package ZincklesNetCart
- * @since   1.3.0
+ * @since   1.0.0
  */
+
 defined( 'ABSPATH' ) || exit;
 
 class ZNC_Cart_Snapshot {
 
-    /** @var ZNC_Checkout_Host */
-    private $host;
-
-    /** @var bool recursion guard */
-    private static $pushing = false;
-
-    public function __construct( ZNC_Checkout_Host $host ) {
-        $this->host = $host;
-    }
-
     public function init() {
-        add_action( 'woocommerce_add_to_cart',                        array( $this, 'on_add_to_cart' ), 20, 6 );
-        add_action( 'woocommerce_cart_item_removed',                  array( $this, 'on_remove_from_cart' ), 20, 2 );
-        add_action( 'woocommerce_after_cart_item_quantity_update',     array( $this, 'on_qty_update' ), 20, 4 );
-        add_filter( 'woocommerce_add_to_cart_fragments',              array( $this, 'inject_cart_count_fragment' ) );
+        // Fire on add-to-cart, quantity update, and item removal.
+        add_action( 'woocommerce_add_to_cart',            array( $this, 'on_cart_change' ), 20, 6 );
+        add_action( 'woocommerce_cart_item_removed',      array( $this, 'on_item_removed' ), 20, 2 );
+        add_action( 'woocommerce_after_cart_item_quantity_update', array( $this, 'on_quantity_update' ), 20, 4 );
+        add_action( 'woocommerce_cart_emptied',           array( $this, 'on_cart_emptied' ), 20 );
+
+        // Non-blocking push via shutdown hook.
+        add_action( 'znc_push_cart_snapshot', array( $this, 'push_to_main_site' ) );
     }
 
     /**
-     * Fires when a product is added to cart on any enrolled subsite.
+     * Triggered on add-to-cart.
      */
-    public function on_add_to_cart( $cart_item_key, $product_id, $quantity, $variation_id, $variation, $cart_item_data ) {
-        if ( self::$pushing ) return;
-        if ( ! is_user_logged_in() ) return;
-
-        $product = wc_get_product( $variation_id ?: $product_id );
-        if ( ! $product ) return;
-
-        $source_blog_id = get_current_blog_id();
-        $user_id        = get_current_user_id();
-
-        $item_data = array(
-            'user_id'        => $user_id,
-            'source_blog_id' => $source_blog_id,
-            'product_id'     => $product_id,
-            'variation_id'   => $variation_id ?: 0,
-            'quantity'       => $quantity,
-            'product_name'   => $product->get_name(),
-            'product_price'  => (float) $product->get_price(),
-            'currency'       => get_woocommerce_currency(),
-            'product_image'  => wp_get_attachment_url( $product->get_image_id() ) ?: '',
-            'product_sku'    => $product->get_sku(),
-            'product_url'    => get_permalink( $product_id ),
-            'shop_name'      => get_bloginfo( 'name' ),
-            'shop_url'       => home_url(),
-            'variation_data' => $variation ? wp_json_encode( $variation ) : '{}',
-            'stock_status'   => $product->get_stock_status(),
-            'stock_qty'      => $product->get_stock_quantity(),
-            'meta'           => wp_json_encode( $cart_item_data ),
-            'added_at'       => current_time( 'mysql', true ),
-            'expires_at'     => gmdate( 'Y-m-d H:i:s', time() + ( 7 * DAY_IN_SECONDS ) ),
-        );
-
-        $this->push_to_global_cart( $item_data );
+    public function on_cart_change( $cart_item_key, $product_id, $quantity, $variation_id, $variation, $cart_item_data ) {
+        $this->schedule_push();
     }
 
     /**
-     * Write item to the global cart table on the checkout host.
-     * Uses direct DB write — no HTTP, no WC reinitialization.
+     * Triggered on item removal.
      */
-    private function push_to_global_cart( $item_data ) {
-        global $wpdb;
+    public function on_item_removed( $cart_item_key, $cart ) {
+        $this->schedule_push();
+    }
 
-        self::$pushing = true;
-        $host_id      = $this->host->get_host_id();
-        $current_blog = get_current_blog_id();
-        $need_switch  = ( $current_blog !== $host_id );
+    /**
+     * Triggered on quantity update.
+     */
+    public function on_quantity_update( $cart_item_key, $quantity, $old_quantity, $cart ) {
+        $this->schedule_push();
+    }
 
-        if ( $need_switch ) {
-            switch_to_blog( $host_id );
+    /**
+     * Triggered when cart is emptied.
+     */
+    public function on_cart_emptied() {
+        $this->schedule_push();
+    }
+
+    /**
+     * Schedule the push for the shutdown hook (non-blocking).
+     */
+    private function schedule_push() {
+        if ( ! is_user_logged_in() ) {
+            return;
         }
 
+        // Check enrollment.
+        if ( ! $this->is_enrolled() ) {
+            return;
+        }
+
+        // Use shutdown to avoid blocking the add-to-cart response.
+        if ( ! has_action( 'shutdown', array( $this, 'push_to_main_site' ) ) ) {
+            add_action( 'shutdown', array( $this, 'push_to_main_site' ) );
+        }
+    }
+
+    /**
+     * Check if this subsite is enrolled in Net Cart.
+     */
+    private function is_enrolled() {
+        $settings = get_site_option( 'znc_network_settings', array() );
+        $blog_id  = get_current_blog_id();
+
+        // Check blocked.
+        if ( in_array( $blog_id, (array) ( $settings['blocked_sites'] ?? array() ), true ) ) {
+            return false;
+        }
+
+        $mode = $settings['enrollment_mode'] ?? 'opt-in';
+        switch ( $mode ) {
+            case 'opt-out':
+                return true;
+            case 'manual':
+            case 'opt-in':
+            default:
+                return in_array( $blog_id, (array) ( $settings['enrolled_sites'] ?? array() ), true );
+        }
+    }
+
+    /**
+     * Build the full cart snapshot for a user on this subsite.
+     */
+    public function build( $user_id = null ) {
+        if ( ! $user_id ) {
+            $user_id = get_current_user_id();
+        }
+
+        if ( ! function_exists( 'WC' ) || ! WC()->cart ) {
+            return array(
+                'blog_id'  => get_current_blog_id(),
+                'user_id'  => $user_id,
+                'items'    => array(),
+                'currency' => function_exists( 'get_woocommerce_currency' ) ? get_woocommerce_currency() : 'USD',
+                'shop'     => $this->get_shop_info(),
+            );
+        }
+
+        $items = array();
+        foreach ( WC()->cart->get_cart() as $key => $item ) {
+            $product = $item['data'];
+            if ( ! $product ) {
+                continue;
+            }
+
+            $items[] = array(
+                'cart_item_key' => $key,
+                'product_id'    => $item['product_id'],
+                'variation_id'  => $item['variation_id'] ?? 0,
+                'quantity'      => $item['quantity'],
+                'product_name'  => $product->get_name(),
+                'price'         => (float) $product->get_price(),
+                'line_total'    => (float) $product->get_price() * $item['quantity'],
+                'sku'           => $product->get_sku(),
+                'image_url'     => wp_get_attachment_url( $product->get_image_id() ),
+                'permalink'     => $product->get_permalink(),
+                'in_stock'      => $product->is_in_stock(),
+                'stock_qty'     => $product->managing_stock() ? $product->get_stock_quantity() : null,
+                'weight'        => $product->get_weight(),
+                'variation'     => $item['variation'] ?? array(),
+                'meta'          => $this->get_item_meta( $item ),
+            );
+        }
+
+        return array(
+            'blog_id'    => get_current_blog_id(),
+            'user_id'    => $user_id,
+            'items'      => $items,
+            'currency'   => get_woocommerce_currency(),
+            'shop'       => $this->get_shop_info(),
+            'timestamp'  => current_time( 'timestamp' ),
+            'cart_hash'  => WC()->cart->get_cart_hash(),
+        );
+    }
+
+    /**
+     * Push the current user's cart snapshot to the main site global cart.
+     * Called on shutdown (non-blocking).
+     */
+    public function push_to_main_site() {
+        if ( ! is_user_logged_in() ) {
+            return;
+        }
+
+        $user_id  = get_current_user_id();
+        $blog_id  = get_current_blog_id();
+        $snapshot = $this->build( $user_id );
+
+        // Switch to main site and sync.
+        $main_site_id = get_main_site_id();
+        switch_to_blog( $main_site_id );
+
+        global $wpdb;
         $table = $wpdb->prefix . 'znc_global_cart';
 
-        /* Upsert: update quantity if same product from same shop, else insert */
-        $existing = $wpdb->get_var( $wpdb->prepare(
-            "SELECT id FROM {$table}
-             WHERE user_id = %d AND source_blog_id = %d AND product_id = %d AND variation_id = %d
-             LIMIT 1",
-            $item_data['user_id'],
-            $item_data['source_blog_id'],
-            $item_data['product_id'],
-            $item_data['variation_id']
+        // Check if table exists.
+        if ( $wpdb->get_var( "SHOW TABLES LIKE '{$table}'" ) !== $table ) {
+            restore_current_blog();
+            return;
+        }
+
+        // Clear old items from this subsite for this user.
+        $wpdb->delete( $table, array(
+            'user_id' => $user_id,
+            'blog_id' => $blog_id,
         ) );
 
-        if ( $existing ) {
-            $wpdb->update(
-                $table,
-                array(
-                    'quantity'      => $item_data['quantity'],
-                    'product_price' => $item_data['product_price'],
-                    'stock_status'  => $item_data['stock_status'],
-                    'stock_qty'     => $item_data['stock_qty'],
-                    'added_at'      => $item_data['added_at'],
-                    'expires_at'    => $item_data['expires_at'],
-                ),
-                array( 'id' => $existing ),
-                array( '%d', '%f', '%s', '%d', '%s', '%s' ),
-                array( '%d' )
-            );
-        } else {
-            $wpdb->insert( $table, $item_data );
-        }
-
-        if ( $need_switch ) {
-            restore_current_blog();
-        }
-
-        self::$pushing = false;
-
-        if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-            error_log( sprintf(
-                '[ZNC] Pushed product %d from blog %d to global cart (user %d)',
-                $item_data['product_id'],
-                $item_data['source_blog_id'],
-                $item_data['user_id']
+        // Insert each item from the snapshot.
+        foreach ( $snapshot['items'] as $item ) {
+            $wpdb->insert( $table, array(
+                'user_id'       => $user_id,
+                'blog_id'       => $blog_id,
+                'product_id'    => $item['product_id'],
+                'variation_id'  => $item['variation_id'],
+                'quantity'      => $item['quantity'],
+                'product_name'  => $item['product_name'],
+                'price'         => $item['price'],
+                'line_total'    => $item['line_total'],
+                'currency'      => $snapshot['currency'],
+                'sku'           => $item['sku'],
+                'image_url'     => $item['image_url'],
+                'permalink'     => $item['permalink'],
+                'in_stock'      => $item['in_stock'] ? 1 : 0,
+                'stock_qty'     => $item['stock_qty'],
+                'variation_data' => maybe_serialize( $item['variation'] ),
+                'meta_data'     => maybe_serialize( $item['meta'] ),
+                'shop_name'     => $snapshot['shop']['name'] ?? '',
+                'shop_url'      => $snapshot['shop']['url'] ?? '',
+                'created_at'    => current_time( 'mysql' ),
+                'updated_at'    => current_time( 'mysql' ),
             ) );
         }
+
+        restore_current_blog();
+
+        do_action( 'znc_cart_snapshot_pushed', $user_id, $blog_id, $snapshot );
     }
 
     /**
-     * Remove item from global cart when removed on subsite.
+     * Get basic shop info for this subsite.
      */
-    public function on_remove_from_cart( $cart_item_key, $cart ) {
-        if ( ! is_user_logged_in() ) return;
-        $item = $cart->removed_cart_contents[ $cart_item_key ] ?? null;
-        if ( ! $item ) return;
+    private function get_shop_info() {
+        $subsite_settings = get_option( 'znc_subsite_settings', array() );
 
-        global $wpdb;
-        $host_id      = $this->host->get_host_id();
-        $current_blog = get_current_blog_id();
-        $need_switch  = ( $current_blog !== $host_id );
-
-        if ( $need_switch ) switch_to_blog( $host_id );
-
-        $table = $wpdb->prefix . 'znc_global_cart';
-        $wpdb->delete( $table, array(
-            'user_id'        => get_current_user_id(),
-            'source_blog_id' => $current_blog,
-            'product_id'     => $item['product_id'],
-            'variation_id'   => $item['variation_id'] ?? 0,
-        ) );
-
-        if ( $need_switch ) restore_current_blog();
-    }
-
-    /**
-     * Update quantity in global cart when changed on subsite.
-     */
-    public function on_qty_update( $cart_item_key, $quantity, $old_quantity, $cart ) {
-        if ( ! is_user_logged_in() ) return;
-        $item = $cart->cart_contents[ $cart_item_key ] ?? null;
-        if ( ! $item ) return;
-
-        global $wpdb;
-        $host_id      = $this->host->get_host_id();
-        $current_blog = get_current_blog_id();
-        $need_switch  = ( $current_blog !== $host_id );
-
-        if ( $need_switch ) switch_to_blog( $host_id );
-
-        $table = $wpdb->prefix . 'znc_global_cart';
-        $wpdb->update(
-            $table,
-            array( 'quantity' => $quantity ),
-            array(
-                'user_id'        => get_current_user_id(),
-                'source_blog_id' => $current_blog,
-                'product_id'     => $item['product_id'],
-                'variation_id'   => $item['variation_id'] ?? 0,
-            ),
-            array( '%d' )
+        return array(
+            'name'     => $subsite_settings['display_name'] ?? get_bloginfo( 'name' ),
+            'url'      => home_url(),
+            'currency' => function_exists( 'get_woocommerce_currency' ) ? get_woocommerce_currency() : 'USD',
+            'blog_id'  => get_current_blog_id(),
+            'icon'     => $subsite_settings['badge_icon'] ?? '',
+            'color'    => $subsite_settings['badge_color'] ?? '#7c3aed',
         );
-
-        if ( $need_switch ) restore_current_blog();
     }
 
     /**
-     * Add global cart count to WC AJAX fragments.
+     * Extract relevant meta from a cart item.
      */
-    public function inject_cart_count_fragment( $fragments ) {
-        if ( ! is_user_logged_in() ) return $fragments;
+    private function get_item_meta( $item ) {
+        $meta = array();
 
-        global $wpdb;
-        $host_id      = $this->host->get_host_id();
-        $current_blog = get_current_blog_id();
-        $need_switch  = ( $current_blog !== $host_id );
+        // Include custom meta keys if configured.
+        $subsite_settings = get_option( 'znc_subsite_settings', array() );
+        $custom_keys = array_filter( explode( ',', $subsite_settings['custom_meta_keys'] ?? '' ) );
 
-        if ( $need_switch ) switch_to_blog( $host_id );
+        foreach ( $custom_keys as $key ) {
+            $key = trim( $key );
+            if ( isset( $item[ $key ] ) ) {
+                $meta[ $key ] = $item[ $key ];
+            }
+        }
 
-        $table = $wpdb->prefix . 'znc_global_cart';
-        $count = (int) $wpdb->get_var( $wpdb->prepare(
-            "SELECT COALESCE(SUM(quantity), 0) FROM {$table} WHERE user_id = %d AND expires_at > NOW()",
-            get_current_user_id()
-        ) );
-
-        if ( $need_switch ) restore_current_blog();
-
-        $fragments['.znc-global-cart-count'] = '<span class="znc-global-cart-count">' . $count . '</span>';
-        return $fragments;
+        return $meta;
     }
 }

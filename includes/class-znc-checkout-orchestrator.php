@@ -1,112 +1,205 @@
 <?php
+/**
+ * Checkout Orchestrator — 10-step checkout with compensating rollback.
+ *
+ * v1.2.0: Multi-point-type MyCred support + cross-site validation.
+ *
+ * @package ZincklesNetCart
+ * @since   1.0.0
+ */
+
 defined( 'ABSPATH' ) || exit;
 
 class ZNC_Checkout_Orchestrator {
 
-    public static function init() {}
+    private $store;
+    private $merger;
+    private $currency;
+    private $mycred;
+    private $orders;
+    private $inventory;
+
+    public function __construct(
+        ZNC_Global_Cart_Store $store,
+        ZNC_Global_Cart_Merger $merger,
+        ZNC_Currency_Handler $currency,
+        ZNC_MyCred_Engine $mycred,
+        ZNC_Order_Factory $orders,
+        ZNC_Inventory_Sync $inventory
+    ) {
+        $this->store     = $store;
+        $this->merger    = $merger;
+        $this->currency  = $currency;
+        $this->mycred    = $mycred;
+        $this->orders    = $orders;
+        $this->inventory = $inventory;
+    }
+
+    public function init() {
+        // No hooks — invoked directly from REST endpoint.
+    }
 
     /**
-     * Process checkout — 10-step sequence with compensating rollback.
+     * Process the full checkout.
+     *
+     * @param int   $user_id
+     * @param array $params  Checkout params (payment_method, zcred_deductions, billing, etc.)
+     * @return array|WP_Error
      */
-    public static function process( $user_id, $data = array() ) {
-        $log = array();
+    public function process( $user_id, $params = array() ) {
+        $steps_completed = array();
 
-        /* Step 1: Refresh cart */
-        $refresh = ZNC_Global_Cart_Merger::refresh_cart( $user_id );
-        $log[] = 'Refreshed cart: ' . $refresh['removed'] . ' removed, ' . $refresh['updated'] . ' updated.';
+        try {
+            // Step 1: Refresh & re-validate all lines.
+            $this->merger->refresh_all( $user_id );
+            $issues = $this->merger->validate_all( $user_id );
+            $steps_completed[] = 'refresh';
 
-        /* Step 2: Get cart items */
-        $items = ZNC_Global_Cart_Store::get_cart( $user_id );
-        if ( empty( $items ) ) {
-            return array( 'success' => false, 'error' => 'Cart is empty after validation.', 'log' => $log );
-        }
+            // Step 2: Check for blocking issues.
+            $settings   = get_site_option( 'znc_network_settings', array() );
+            $validation = $settings['checkout_validation'] ?? 'strict';
 
-        /* Step 3: Build parallel totals */
-        $totals = ZNC_Currency_Handler::parallel_totals( $user_id );
-        $log[] = 'Totals: ' . wp_json_encode( $totals['per_currency'] ) . ' → ' . $totals['converted_total'] . ' ' . $totals['base_currency'];
+            $blocking = array_filter( $issues, function ( $i ) {
+                return in_array( $i['issue'], array( 'not_found', 'out_of_stock' ), true );
+            } );
 
-        /* Step 4: Validate MyCred if applicable */
-        $mycred_deductions = array();
-        if ( ! empty( $data['mycred_apply'] ) && is_array( $data['mycred_apply'] ) ) {
-            foreach ( $data['mycred_apply'] as $type_slug => $amount ) {
-                $amount = abs( (float) $amount );
-                if ( $amount <= 0 ) continue;
-
-                if ( ! ZNC_MyCred_Engine::validate_deduction( $user_id, $amount, $type_slug ) ) {
-                    return array(
-                        'success' => false,
-                        'error'   => 'Insufficient ' . $type_slug . ' balance.',
-                        'log'     => $log,
-                    );
-                }
-                $mycred_deductions[ $type_slug ] = $amount;
-            }
-        }
-        $log[] = 'MyCred validated: ' . count( $mycred_deductions ) . ' type(s).';
-
-        /* Step 5: Per-subsite price/stock validation */
-        $grouped = ZNC_Global_Cart_Store::get_cart_grouped( $user_id );
-        foreach ( $grouped as $blog_id => $group ) {
-            $current = get_current_blog_id();
-            $need_switch = ( (int) $blog_id !== $current );
-            if ( $need_switch ) switch_to_blog( $blog_id );
-
-            foreach ( $group['items'] as $item ) {
-                $product = wc_get_product( $item['variation_id'] ?: $item['product_id'] );
-                if ( ! $product || ! $product->is_in_stock() ) {
-                    if ( $need_switch ) restore_current_blog();
-                    return array( 'success' => false, 'error' => $item['product_name'] . ' is no longer available.', 'log' => $log );
-                }
-                if ( $product->managing_stock() && $product->get_stock_quantity() < $item['quantity'] ) {
-                    if ( $need_switch ) restore_current_blog();
-                    return array( 'success' => false, 'error' => $item['product_name'] . ' — insufficient stock.', 'log' => $log );
-                }
+            if ( ! empty( $blocking ) ) {
+                return new WP_Error( 'validation_failed', 'Some items are no longer available.', array(
+                    'status' => 400,
+                    'issues' => $blocking,
+                ) );
             }
 
-            if ( $need_switch ) restore_current_blog();
-        }
-        $log[] = 'All items validated against origin shops.';
-
-        /* Step 6: Deduct MyCred */
-        foreach ( $mycred_deductions as $type_slug => $amount ) {
-            ZNC_MyCred_Engine::deduct( $user_id, $amount, $type_slug );
-        }
-        $log[] = 'MyCred deducted.';
-
-        /* Step 7: Create parent order */
-        $parent_order = ZNC_Order_Factory::create_parent_order( $user_id, $items, $totals, $mycred_deductions );
-        if ( is_wp_error( $parent_order ) ) {
-            /* Rollback MyCred */
-            foreach ( $mycred_deductions as $type_slug => $amount ) {
-                ZNC_MyCred_Engine::refund( $user_id, $amount, $type_slug );
+            if ( $validation === 'strict' && ! empty( $issues ) ) {
+                return new WP_Error( 'validation_failed', 'Price or stock changes detected.', array(
+                    'status' => 400,
+                    'issues' => $issues,
+                ) );
             }
-            return array( 'success' => false, 'error' => 'Failed to create order.', 'log' => $log );
+            $steps_completed[] = 'validate';
+
+            // Step 3: Build parallel totals.
+            $items  = $this->store->get_cart( $user_id );
+            $totals = $this->currency->parallel_totals( $items );
+            $steps_completed[] = 'totals';
+
+            // Step 4: Validate MyCred deductions (multi-type).
+            $zcred_deductions = $params['zcred_deductions'] ?? array();
+            $total_zcred_value = 0.0;
+
+            foreach ( $zcred_deductions as $point_type => $amount ) {
+                $amount = (float) $amount;
+                if ( $amount <= 0 ) {
+                    continue;
+                }
+
+                if ( ! $this->mycred->validate_deduction( $user_id, $point_type, $amount ) ) {
+                    return new WP_Error( 'insufficient_points', sprintf(
+                        'Insufficient %s balance.',
+                        $point_type
+                    ), array( 'status' => 400 ) );
+                }
+
+                // Get exchange rate for this type.
+                $types = $this->mycred->get_enabled_types();
+                $rate  = isset( $types[ $point_type ] ) ? (float) $types[ $point_type ]['exchange_rate'] : 1.0;
+                $total_zcred_value += $amount * $rate;
+            }
+
+            // Verify ZCred value doesn't exceed order total.
+            if ( $total_zcred_value > $totals['converted_total'] ) {
+                return new WP_Error( 'zcred_exceeds_total', 'ZCred value exceeds order total.', array( 'status' => 400 ) );
+            }
+
+            $monetary_total = $totals['converted_total'] - $total_zcred_value;
+            $steps_completed[] = 'mycred_validate';
+
+            // Step 5: Deduct MyCred points.
+            $mycred_results = array();
+            foreach ( $zcred_deductions as $point_type => $amount ) {
+                $amount = (float) $amount;
+                if ( $amount <= 0 ) {
+                    continue;
+                }
+
+                $result = $this->mycred->deduct( $user_id, $point_type, $amount, 'znc_checkout', array(
+                    'order_id' => 'pending',
+                ) );
+
+                if ( is_wp_error( $result ) ) {
+                    // Rollback previous deductions.
+                    foreach ( $mycred_results as $prev ) {
+                        $this->mycred->refund( $user_id, $prev['point_type'], $prev['deducted'] );
+                    }
+                    return $result;
+                }
+
+                $mycred_results[] = $result;
+            }
+            $steps_completed[] = 'mycred_deduct';
+
+            // Step 6: Create parent order on main site.
+            $shops       = $this->store->get_cart( $user_id, 'shop' );
+            $parent_order = $this->orders->create_parent_order( $user_id, $shops, array(
+                'totals'           => $totals,
+                'monetary_total'   => $monetary_total,
+                'zcred_deductions' => $zcred_deductions,
+                'mycred_results'   => $mycred_results,
+                'billing'          => $params['billing'] ?? array(),
+                'shipping'         => $params['shipping'] ?? array(),
+                'payment_method'   => $params['payment_method'] ?? '',
+            ) );
+
+            if ( is_wp_error( $parent_order ) ) {
+                // Rollback MyCred.
+                foreach ( $mycred_results as $prev ) {
+                    $this->mycred->refund( $user_id, $prev['point_type'], $prev['deducted'] );
+                }
+                return $parent_order;
+            }
+            $steps_completed[] = 'parent_order';
+
+            // Step 7: Create child orders on each subsite.
+            $child_orders = $this->orders->create_child_orders(
+                $parent_order['order_id'],
+                $user_id,
+                $shops
+            );
+            $steps_completed[] = 'child_orders';
+
+            // Step 8: Sync inventory on each subsite.
+            $inventory_results = $this->inventory->deduct_all( $shops );
+            $steps_completed[] = 'inventory';
+
+            // Step 9: Clear global cart.
+            $this->store->clear_cart( $user_id );
+            $steps_completed[] = 'clear_cart';
+
+            // Step 10: Fire completion action.
+            do_action( 'znc_checkout_completed', array(
+                'user_id'        => $user_id,
+                'parent_order'   => $parent_order,
+                'child_orders'   => $child_orders,
+                'totals'         => $totals,
+                'mycred_results' => $mycred_results,
+            ) );
+            $steps_completed[] = 'complete';
+
+            return array(
+                'success'          => true,
+                'parent_order_id'  => $parent_order['order_id'],
+                'child_orders'     => $child_orders,
+                'totals'           => $totals,
+                'monetary_charged' => $monetary_total,
+                'zcred_deducted'   => $mycred_results,
+                'steps_completed'  => $steps_completed,
+            );
+
+        } catch ( \Exception $e ) {
+            return new WP_Error( 'checkout_error', $e->getMessage(), array(
+                'status'          => 500,
+                'steps_completed' => $steps_completed,
+            ) );
         }
-        $log[] = 'Parent order #' . $parent_order . ' created.';
-
-        /* Step 8: Create child orders */
-        $child_orders = ZNC_Order_Factory::create_child_orders( $parent_order, $user_id, $grouped );
-        $log[] = 'Child orders created: ' . count( $child_orders );
-
-        /* Step 9: Sync inventory */
-        foreach ( $grouped as $blog_id => $group ) {
-            ZNC_Inventory_Sync::deduct_stock( $blog_id, $group['items'] );
-        }
-        $log[] = 'Inventory synced.';
-
-        /* Step 10: Clear cart */
-        ZNC_Global_Cart_Store::clear_cart( $user_id );
-        $log[] = 'Cart cleared.';
-
-        do_action( 'znc_checkout_completed', $parent_order, $child_orders, $user_id );
-
-        return array(
-            'success'        => true,
-            'parent_order'   => $parent_order,
-            'child_orders'   => $child_orders,
-            'totals'         => $totals,
-            'mycred_deducted'=> $mycred_deductions,
-            'log'            => $log,
-        );
     }
 }

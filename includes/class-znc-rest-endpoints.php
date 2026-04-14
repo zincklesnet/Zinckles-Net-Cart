@@ -1,221 +1,325 @@
 <?php
+/**
+ * REST Endpoints — all cross-site API routes.
+ *
+ * v1.2.0: Added /global-cart/refresh endpoint for full cross-site aggregation.
+ *
+ * @package ZincklesNetCart
+ * @since   1.0.0
+ */
+
 defined( 'ABSPATH' ) || exit;
 
 class ZNC_REST_Endpoints {
 
-    public static function init() {
-        add_action( 'rest_api_init', array( __CLASS__, 'register_routes' ) );
+    public function init() {
+        add_action( 'rest_api_init', array( $this, 'register_routes' ) );
     }
 
-    public static function register_routes() {
+    public function register_routes() {
         $ns = 'znc/v1';
 
-        /* Subsite endpoints */
+        /* ── Subsite endpoints ────────────────────────────── */
         register_rest_route( $ns, '/cart-snapshot', array(
             'methods'             => 'GET',
-            'callback'            => array( __CLASS__, 'get_cart_snapshot' ),
-            'permission_callback' => array( __CLASS__, 'check_auth' ),
+            'callback'            => array( $this, 'get_cart_snapshot' ),
+            'permission_callback' => array( $this, 'verify_hmac' ),
         ) );
 
         register_rest_route( $ns, '/shop-settings', array(
             'methods'             => 'GET',
-            'callback'            => array( __CLASS__, 'get_shop_settings' ),
-            'permission_callback' => array( __CLASS__, 'check_auth' ),
+            'callback'            => array( $this, 'get_shop_settings' ),
+            'permission_callback' => array( $this, 'verify_hmac' ),
         ) );
 
         register_rest_route( $ns, '/pricing/validate', array(
             'methods'             => 'POST',
-            'callback'            => array( __CLASS__, 'validate_pricing' ),
-            'permission_callback' => array( __CLASS__, 'check_auth' ),
+            'callback'            => array( $this, 'validate_pricing' ),
+            'permission_callback' => array( $this, 'verify_hmac' ),
         ) );
 
         register_rest_route( $ns, '/inventory/deduct', array(
             'methods'             => 'POST',
-            'callback'            => array( __CLASS__, 'deduct_inventory' ),
-            'permission_callback' => array( __CLASS__, 'check_auth' ),
+            'callback'            => array( $this, 'deduct_inventory' ),
+            'permission_callback' => array( $this, 'verify_hmac' ),
         ) );
 
         register_rest_route( $ns, '/inventory/restore', array(
             'methods'             => 'POST',
-            'callback'            => array( __CLASS__, 'restore_inventory' ),
-            'permission_callback' => array( __CLASS__, 'check_auth' ),
+            'callback'            => array( $this, 'restore_inventory' ),
+            'permission_callback' => array( $this, 'verify_hmac' ),
         ) );
 
         register_rest_route( $ns, '/orders/create-child', array(
             'methods'             => 'POST',
-            'callback'            => array( __CLASS__, 'create_child_order' ),
-            'permission_callback' => array( __CLASS__, 'check_auth' ),
+            'callback'            => array( $this, 'create_child_order' ),
+            'permission_callback' => array( $this, 'verify_hmac' ),
         ) );
 
-        /* Main site endpoints */
+        /* ── Main-site endpoints ──────────────────────────── */
         register_rest_route( $ns, '/global-cart', array(
             'methods'             => 'GET',
-            'callback'            => array( __CLASS__, 'get_global_cart' ),
-            'permission_callback' => 'is_user_logged_in',
+            'callback'            => array( $this, 'get_global_cart' ),
+            'permission_callback' => array( $this, 'verify_logged_in' ),
         ) );
 
         register_rest_route( $ns, '/global-cart/add', array(
             'methods'             => 'POST',
-            'callback'            => array( __CLASS__, 'add_to_global_cart' ),
-            'permission_callback' => 'is_user_logged_in',
+            'callback'            => array( $this, 'add_to_global_cart' ),
+            'permission_callback' => array( $this, 'verify_hmac_or_user' ),
         ) );
 
         register_rest_route( $ns, '/global-cart/remove', array(
             'methods'             => 'POST',
-            'callback'            => array( __CLASS__, 'remove_from_global_cart' ),
-            'permission_callback' => 'is_user_logged_in',
+            'callback'            => array( $this, 'remove_from_global_cart' ),
+            'permission_callback' => array( $this, 'verify_logged_in' ),
+        ) );
+
+        register_rest_route( $ns, '/global-cart/refresh', array(
+            'methods'             => 'POST',
+            'callback'            => array( $this, 'refresh_global_cart' ),
+            'permission_callback' => array( $this, 'verify_logged_in' ),
         ) );
 
         register_rest_route( $ns, '/checkout', array(
             'methods'             => 'POST',
-            'callback'            => array( __CLASS__, 'process_checkout' ),
-            'permission_callback' => 'is_user_logged_in',
+            'callback'            => array( $this, 'process_checkout' ),
+            'permission_callback' => array( $this, 'verify_logged_in' ),
         ) );
     }
 
-    public static function check_auth( $request ) {
-        return ZNC_REST_Auth::verify( $request );
+    /* ── Permission callbacks ─────────────────────────────── */
+
+    public function verify_hmac( WP_REST_Request $request ) {
+        return apply_filters( 'znc_rest_verify_request', $request );
     }
 
-    /* ── Subsite Endpoints ────────────────────────────────────── */
+    public function verify_logged_in() {
+        return is_user_logged_in();
+    }
 
-    public static function get_cart_snapshot( $request ) {
-        if ( ! function_exists( 'WC' ) ) {
-            return new WP_Error( 'no_wc', 'WooCommerce not active.', array( 'status' => 500 ) );
+    public function verify_hmac_or_user( WP_REST_Request $request ) {
+        if ( is_user_logged_in() ) {
+            return true;
         }
-        $snapshot = new ZNC_Cart_Snapshot( new ZNC_Checkout_Host() );
-        return rest_ensure_response( array( 'blog_id' => get_current_blog_id(), 'status' => 'ok' ) );
+        return $this->verify_hmac( $request );
     }
 
-    public static function get_shop_settings( $request ) {
-        $settings = ZNC_Shop_Settings::get_settings();
-        return rest_ensure_response( $settings );
+    /* ── Subsite: Cart Snapshot ────────────────────────────── */
+
+    public function get_cart_snapshot( WP_REST_Request $request ) {
+        $user_id = absint( $request->get_param( 'user_id' ) );
+        if ( ! $user_id ) {
+            return new WP_Error( 'missing_user', 'user_id is required.', array( 'status' => 400 ) );
+        }
+        $snapshot = new ZNC_Cart_Snapshot();
+        return rest_ensure_response( $snapshot->build( $user_id ) );
     }
 
-    public static function validate_pricing( $request ) {
-        $items   = $request->get_param( 'items' );
+    /* ── Subsite: Shop Settings ───────────────────────────── */
+
+    public function get_shop_settings() {
+        $shop = new ZNC_Shop_Settings();
+        return rest_ensure_response( $shop->get_settings() );
+    }
+
+    /* ── Subsite: Pricing Validation ──────────────────────── */
+
+    public function validate_pricing( WP_REST_Request $request ) {
+        $items = $request->get_json_params();
+        if ( empty( $items['products'] ) ) {
+            return new WP_Error( 'no_products', 'Products array is required.', array( 'status' => 400 ) );
+        }
+
         $results = array();
+        foreach ( $items['products'] as $item ) {
+            $product_id     = absint( $item['product_id'] ?? 0 );
+            $variation_id   = absint( $item['variation_id'] ?? 0 );
+            $quantity       = absint( $item['quantity'] ?? 1 );
+            $expected_price = floatval( $item['expected_price'] ?? 0 );
 
-        if ( ! is_array( $items ) ) {
-            return new WP_Error( 'invalid', 'Items array required.', array( 'status' => 400 ) );
-        }
-
-        foreach ( $items as $item ) {
-            $product = wc_get_product( $item['variation_id'] ?: $item['product_id'] );
+            $product = wc_get_product( $variation_id ?: $product_id );
             if ( ! $product ) {
-                $results[] = array( 'product_id' => $item['product_id'], 'valid' => false, 'reason' => 'not_found' );
+                $results[] = array(
+                    'product_id' => $product_id,
+                    'valid'      => false,
+                    'reason'     => 'not_found',
+                );
                 continue;
             }
-            $current_price = (float) $product->get_price();
-            $price_match   = abs( $current_price - (float) $item['expected_price'] ) < 0.01;
-            $in_stock      = $product->is_in_stock() && ( ! $product->managing_stock() || $product->get_stock_quantity() >= $item['quantity'] );
+
+            $current_price = floatval( $product->get_price() );
+            $in_stock      = $product->is_in_stock()
+                && ( ! $product->managing_stock() || $product->get_stock_quantity() >= $quantity );
+            $price_match   = abs( $current_price - $expected_price ) < 0.01;
 
             $results[] = array(
-                'product_id'    => $item['product_id'],
-                'variation_id'  => $item['variation_id'] ?? 0,
+                'product_id'    => $product_id,
+                'variation_id'  => $variation_id,
                 'valid'         => $price_match && $in_stock,
                 'current_price' => $current_price,
-                'price_match'   => $price_match,
                 'in_stock'      => $in_stock,
-                'stock_qty'     => $product->get_stock_quantity(),
+                'stock_qty'     => $product->managing_stock() ? $product->get_stock_quantity() : null,
+                'price_changed' => ! $price_match,
             );
         }
 
         return rest_ensure_response( array( 'results' => $results ) );
     }
 
-    public static function deduct_inventory( $request ) {
-        $items = $request->get_param( 'items' );
-        if ( ! is_array( $items ) ) {
-            return new WP_Error( 'invalid', 'Items array required.', array( 'status' => 400 ) );
+    /* ── Subsite: Inventory ───────────────────────────────── */
+
+    public function deduct_inventory( WP_REST_Request $request ) {
+        $params  = $request->get_json_params();
+        $product = wc_get_product( $params['variation_id'] ?? $params['product_id'] ?? 0 );
+
+        if ( ! $product ) {
+            return new WP_Error( 'not_found', 'Product not found.', array( 'status' => 404 ) );
         }
 
-        $results = array();
-        foreach ( $items as $item ) {
-            $product = wc_get_product( $item['variation_id'] ?: $item['product_id'] );
-            if ( ! $product || ! $product->managing_stock() ) {
-                $results[] = array( 'product_id' => $item['product_id'], 'deducted' => false );
-                continue;
+        if ( $product->managing_stock() ) {
+            $new_stock = wc_update_product_stock( $product, $params['quantity'], 'decrease' );
+            if ( is_wp_error( $new_stock ) ) {
+                return $new_stock;
             }
-            $new_qty = wc_update_product_stock( $product, $item['quantity'], 'decrease' );
-            $results[] = array( 'product_id' => $item['product_id'], 'deducted' => true, 'new_qty' => $new_qty );
+            return rest_ensure_response( array( 'success' => true, 'new_stock' => $new_stock ) );
         }
 
-        return rest_ensure_response( array( 'results' => $results ) );
+        return rest_ensure_response( array( 'success' => true, 'message' => 'Stock not managed.' ) );
     }
 
-    public static function restore_inventory( $request ) {
-        $items = $request->get_param( 'items' );
-        if ( ! is_array( $items ) ) {
-            return new WP_Error( 'invalid', 'Items array required.', array( 'status' => 400 ) );
+    public function restore_inventory( WP_REST_Request $request ) {
+        $params  = $request->get_json_params();
+        $product = wc_get_product( $params['variation_id'] ?? $params['product_id'] ?? 0 );
+
+        if ( ! $product ) {
+            return new WP_Error( 'not_found', 'Product not found.', array( 'status' => 404 ) );
         }
 
-        $results = array();
-        foreach ( $items as $item ) {
-            $product = wc_get_product( $item['variation_id'] ?: $item['product_id'] );
-            if ( ! $product || ! $product->managing_stock() ) {
-                $results[] = array( 'product_id' => $item['product_id'], 'restored' => false );
-                continue;
-            }
-            $new_qty = wc_update_product_stock( $product, $item['quantity'], 'increase' );
-            $results[] = array( 'product_id' => $item['product_id'], 'restored' => true, 'new_qty' => $new_qty );
+        if ( $product->managing_stock() ) {
+            wc_update_product_stock( $product, $params['quantity'], 'increase' );
         }
 
-        return rest_ensure_response( array( 'results' => $results ) );
+        return rest_ensure_response( array( 'success' => true ) );
     }
 
-    public static function create_child_order( $request ) {
-        $data = $request->get_params();
-        if ( empty( $data['items'] ) || empty( $data['user_id'] ) ) {
-            return new WP_Error( 'invalid', 'Items and user_id required.', array( 'status' => 400 ) );
+    /* ── Subsite: Child Order ─────────────────────────────── */
+
+    public function create_child_order( WP_REST_Request $request ) {
+        $params = $request->get_json_params();
+
+        $order = wc_create_order( array(
+            'customer_id' => $params['customer_id'] ?? 0,
+            'status'      => 'processing',
+        ) );
+
+        if ( is_wp_error( $order ) ) {
+            return $order;
         }
 
-        $order = wc_create_order( array( 'customer_id' => absint( $data['user_id'] ) ) );
-        if ( is_wp_error( $order ) ) return $order;
-
-        foreach ( $data['items'] as $item ) {
-            $product = wc_get_product( $item['variation_id'] ?: $item['product_id'] );
+        foreach ( $params['items'] ?? array() as $item ) {
+            $product = wc_get_product( $item['variation_id'] ?? $item['product_id'] );
             if ( $product ) {
-                $order->add_product( $product, $item['quantity'] );
+                $order->add_product( $product, $item['quantity'], array(
+                    'subtotal' => $item['line_total'],
+                    'total'    => $item['line_total'],
+                ) );
             }
         }
 
-        $order->set_currency( get_woocommerce_currency() );
+        $order->set_currency( $params['currency'] ?? get_woocommerce_currency() );
         $order->calculate_totals();
-        $order->update_meta_data( '_znc_parent_order_id', absint( $data['parent_order_id'] ?? 0 ) );
-        $order->update_meta_data( '_znc_parent_blog_id', absint( $data['parent_blog_id'] ?? 0 ) );
-        $order->update_status( 'processing', 'Created by Zinckles Net Cart.' );
+        $order->add_order_note( sprintf(
+            'Net Cart child order — parent #%d',
+            $params['parent_order_id'] ?? 0
+        ) );
+        $order->update_meta_data( '_znc_parent_order_id', $params['parent_order_id'] ?? 0 );
+        $order->update_meta_data( '_znc_parent_site_id', $params['parent_site_id'] ?? get_main_site_id() );
         $order->save();
 
         return rest_ensure_response( array(
+            'success'        => true,
             'child_order_id' => $order->get_id(),
-            'blog_id'        => get_current_blog_id(),
-            'total'          => $order->get_total(),
         ) );
     }
 
-    /* ── Main Site Endpoints ──────────────────────────────────── */
+    /* ── Main site: Global Cart ───────────────────────────── */
 
-    public static function get_global_cart( $request ) {
-        $items = ZNC_Global_Cart_Store::get_cart( get_current_user_id() );
-        return rest_ensure_response( array( 'items' => $items ) );
+    public function get_global_cart( WP_REST_Request $request ) {
+        $store    = new ZNC_Global_Cart_Store();
+        $group_by = $request->get_param( 'group_by' ) ?: 'flat';
+        $items    = $store->get_cart( get_current_user_id(), $group_by );
+        $summary  = $store->get_cart_summary( get_current_user_id() );
+
+        return rest_ensure_response( array(
+            'items'   => $items,
+            'summary' => $summary,
+        ) );
     }
 
-    public static function add_to_global_cart( $request ) {
-        $item = $request->get_params();
-        $result = ZNC_Global_Cart_Store::add_item( get_current_user_id(), $item );
-        return rest_ensure_response( $result );
+    public function add_to_global_cart( WP_REST_Request $request ) {
+        $params   = $request->get_json_params();
+        $store    = new ZNC_Global_Cart_Store();
+        $currency = new ZNC_Currency_Handler();
+        $merger   = new ZNC_Global_Cart_Merger( $store, $currency );
+
+        $result = $merger->add_item( $params );
+        if ( is_wp_error( $result ) ) {
+            return $result;
+        }
+
+        return rest_ensure_response( array( 'success' => true, 'cart' => $result ) );
     }
 
-    public static function remove_from_global_cart( $request ) {
-        $item_id = absint( $request->get_param( 'item_id' ) );
-        $result  = ZNC_Global_Cart_Store::remove_item( get_current_user_id(), $item_id );
-        return rest_ensure_response( $result );
+    public function remove_from_global_cart( WP_REST_Request $request ) {
+        $params = $request->get_json_params();
+        $store  = new ZNC_Global_Cart_Store();
+        $store->remove_item( get_current_user_id(), $params['line_id'] ?? 0 );
+
+        return rest_ensure_response( array( 'success' => true ) );
     }
 
-    public static function process_checkout( $request ) {
-        $data   = $request->get_params();
-        $result = ZNC_Checkout_Orchestrator::process( get_current_user_id(), $data );
+    /**
+     * Refresh the global cart — re-fetches snapshots from all enrolled subsites.
+     * v1.2.0 addition.
+     */
+    public function refresh_global_cart( WP_REST_Request $request ) {
+        $user_id  = get_current_user_id();
+        $store    = new ZNC_Global_Cart_Store();
+        $currency = new ZNC_Currency_Handler();
+        $merger   = new ZNC_Global_Cart_Merger( $store, $currency );
+
+        $result = $merger->refresh_all( $user_id );
+        if ( is_wp_error( $result ) ) {
+            return $result;
+        }
+
+        return rest_ensure_response( array(
+            'success' => true,
+            'cart'    => $store->get_cart( $user_id, 'shop' ),
+            'summary' => $store->get_cart_summary( $user_id ),
+        ) );
+    }
+
+    /* ── Main site: Checkout ──────────────────────────────── */
+
+    public function process_checkout( WP_REST_Request $request ) {
+        $params      = $request->get_json_params();
+        $store       = new ZNC_Global_Cart_Store();
+        $currency    = new ZNC_Currency_Handler();
+        $merger      = new ZNC_Global_Cart_Merger( $store, $currency );
+        $mycred      = new ZNC_MyCred_Engine();
+        $orders      = new ZNC_Order_Factory();
+        $inventory   = new ZNC_Inventory_Sync();
+        $orchestrator = new ZNC_Checkout_Orchestrator(
+            $store, $merger, $currency, $mycred, $orders, $inventory
+        );
+
+        $result = $orchestrator->process( get_current_user_id(), $params );
+        if ( is_wp_error( $result ) ) {
+            return $result;
+        }
+
         return rest_ensure_response( $result );
     }
 }

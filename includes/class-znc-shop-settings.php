@@ -1,54 +1,67 @@
 <?php
+/**
+ * Shop Settings Provider (runs on each subsite).
+ *
+ * @package ZincklesNetCart
+ * @since   1.0.0
+ */
+
 defined( 'ABSPATH' ) || exit;
 
 class ZNC_Shop_Settings {
 
-    public static function init() {
-        /* Settings are read on demand */
+    public function init() {
+        // Settings are served via REST, no hooks needed here.
     }
 
-    public static function get_settings() {
-        $settings = array(
-            'blog_id'       => get_current_blog_id(),
-            'shop_name'     => get_bloginfo( 'name' ),
-            'shop_url'      => home_url(),
-            'currency'      => function_exists( 'get_woocommerce_currency' ) ? get_woocommerce_currency() : 'USD',
-            'has_wc'        => class_exists( 'WooCommerce' ),
-            'has_mycred'    => function_exists( 'mycred' ),
-            'tax_enabled'   => get_option( 'woocommerce_calc_taxes', 'no' ) === 'yes',
-            'prices_inc_tax'=> get_option( 'woocommerce_prices_include_tax', 'no' ) === 'yes',
-            'shipping'      => self::get_shipping_zones(),
+    /**
+     * Get full shop settings for this subsite.
+     */
+    public function get_settings() {
+        $subsite = get_option( 'znc_subsite_settings', array() );
+
+        return array(
+            'blog_id'     => get_current_blog_id(),
+            'name'        => $subsite['display_name'] ?? get_bloginfo( 'name' ),
+            'url'         => home_url(),
+            'currency'    => function_exists( 'get_woocommerce_currency' ) ? get_woocommerce_currency() : 'USD',
+            'wc_active'   => class_exists( 'WooCommerce' ),
+            'mycred'      => function_exists( 'mycred' ),
+            'mycred_types' => function_exists( 'mycred_get_types' ) ? mycred_get_types() : array(),
+            'tax_enabled' => function_exists( 'wc_tax_enabled' ) ? wc_tax_enabled() : false,
+            'shipping'    => $this->get_shipping_config( $subsite ),
+            'tax'         => $this->get_tax_config( $subsite ),
+            'zcred'       => $this->get_zcred_config( $subsite ),
+            'branding'    => array(
+                'display_name' => $subsite['display_name'] ?? get_bloginfo( 'name' ),
+                'tagline'      => $subsite['tagline'] ?? get_bloginfo( 'description' ),
+                'badge_color'  => $subsite['badge_color'] ?? '#7c3aed',
+                'badge_icon'   => $subsite['badge_icon'] ?? '',
+            ),
         );
-
-        if ( $settings['has_mycred'] && function_exists( 'mycred_get_types' ) ) {
-            $settings['mycred_types'] = mycred_get_types();
-        }
-
-        return $settings;
     }
 
-    private static function get_shipping_zones() {
-        if ( ! class_exists( 'WC_Shipping_Zones' ) ) return array();
+    private function get_shipping_config( $subsite ) {
+        return array(
+            'mode'       => $subsite['shipping_mode'] ?? 'inherit',
+            'flat_rate'  => floatval( $subsite['shipping_flat_rate'] ?? 0 ),
+            'free_above' => floatval( $subsite['shipping_free_threshold'] ?? 0 ),
+        );
+    }
 
-        $zones  = WC_Shipping_Zones::get_zones();
-        $result = array();
+    private function get_tax_config( $subsite ) {
+        return array(
+            'mode'     => $subsite['tax_mode'] ?? 'inherit',
+            'rate'     => floatval( $subsite['tax_rate'] ?? 0 ),
+            'label'    => $subsite['tax_label'] ?? 'Tax',
+        );
+    }
 
-        foreach ( $zones as $zone ) {
-            $methods = array();
-            foreach ( $zone['shipping_methods'] as $method ) {
-                $methods[] = array(
-                    'id'    => $method->id,
-                    'title' => $method->get_title(),
-                    'cost'  => $method->get_option( 'cost', 0 ),
-                );
-            }
-            $result[] = array(
-                'id'      => $zone['id'],
-                'name'    => $zone['zone_name'],
-                'methods' => $methods,
-            );
-        }
-
-        return $result;
+    private function get_zcred_config( $subsite ) {
+        return array(
+            'accept'          => ! empty( $subsite['zcred_accept'] ),
+            'max_percent'     => absint( $subsite['zcred_max_percent'] ?? 50 ),
+            'earn_multiplier' => floatval( $subsite['zcred_earn_multiplier'] ?? 1.0 ),
+        );
     }
 }
