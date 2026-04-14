@@ -1,263 +1,184 @@
 <?php
 /**
- * Zinckles Net Cart — My Account Integration
+ * My Account Integration (checkout host only).
  *
- * Adds Net Cart Orders tab to WooCommerce My Account with full
- * cross-site order history, currency/ZCred breakdowns, and subsite details.
+ * Adds "Net Cart Orders" tab to WooCommerce My Account showing
+ * cross-site orders with per-shop breakdowns, currency & ZCred details.
  *
- * @package Zinckles_Net_Cart
- * @since   1.1.0
+ * @package ZincklesNetCart
+ * @since   1.3.0
  */
-
-if ( ! defined( 'ABSPATH' ) ) {
-    exit;
-}
+defined( 'ABSPATH' ) || exit;
 
 class ZNC_My_Account {
 
-    /** @var string Endpoint slug */
-    const ENDPOINT = 'net-cart-orders';
+    private $host;
 
-    /** @var string Detail endpoint slug */
-    const DETAIL_ENDPOINT = 'net-cart-order';
+    public function __construct( ZNC_Checkout_Host $host ) {
+        $this->host = $host;
+    }
 
-    /** @var ZNC_Order_Query */
-    private $order_query;
+    public function init() {
+        if ( ! $this->host->is_current_site_host() ) return;
 
-    /**
-     * Boot the My Account integration.
-     */
-    public function __construct() {
-        $this->order_query = new ZNC_Order_Query();
-
-        // Register endpoints.
         add_action( 'init', array( $this, 'register_endpoints' ) );
-
-        // Add menu items.
-        add_filter( 'woocommerce_account_menu_items', array( $this, 'add_menu_items' ), 20 );
-
-        // Endpoint content.
-        add_action( 'woocommerce_account_' . self::ENDPOINT . '_endpoint', array( $this, 'render_orders_page' ) );
-        add_action( 'woocommerce_account_' . self::DETAIL_ENDPOINT . '_endpoint', array( $this, 'render_order_detail' ) );
-
-        // Endpoint titles.
-        add_filter( 'the_title', array( $this, 'endpoint_title' ), 10, 2 );
-
-        // Dashboard widget.
-        add_action( 'woocommerce_account_dashboard', array( $this, 'render_dashboard_widget' ), 15 );
-
-        // Enqueue assets.
-        add_action( 'wp_enqueue_scripts', array( $this, 'enqueue_assets' ) );
-
-        // Query vars.
-        add_filter( 'woocommerce_get_query_vars', array( $this, 'add_query_vars' ) );
-
-        // Flush rewrite rules on activation.
-        add_action( 'znc_activation', array( $this, 'flush_rewrites' ) );
-
-        // Order status change hooks — update account cache.
-        add_action( 'woocommerce_order_status_changed', array( $this, 'invalidate_cache' ), 10, 3 );
-
-        // Add Net Cart badge to standard WC orders list.
-        add_action( 'woocommerce_my_account_my_orders_column_order-number', array( $this, 'add_netcart_badge' ), 20 );
+        add_filter( 'woocommerce_account_menu_items', array( $this, 'add_menu_item' ), 20 );
+        add_action( 'woocommerce_account_net-cart-orders_endpoint', array( $this, 'render_orders_tab' ) );
+        add_action( 'woocommerce_account_dashboard', array( $this, 'render_dashboard_widget' ), 20 );
+        add_action( 'wp_enqueue_scripts', array( $this, 'enqueue_styles' ) );
     }
 
-    /**
-     * Register WP rewrite endpoints.
-     */
     public function register_endpoints() {
-        add_rewrite_endpoint( self::ENDPOINT, EP_ROOT | EP_PAGES );
-        add_rewrite_endpoint( self::DETAIL_ENDPOINT, EP_ROOT | EP_PAGES );
+        add_rewrite_endpoint( 'net-cart-orders', EP_ROOT | EP_PAGES );
     }
 
-    /**
-     * Add query vars for endpoints.
-     *
-     * @param array $vars Existing query vars.
-     * @return array
-     */
-    public function add_query_vars( $vars ) {
-        $vars[ self::ENDPOINT ]        = self::ENDPOINT;
-        $vars[ self::DETAIL_ENDPOINT ] = self::DETAIL_ENDPOINT;
-        return $vars;
-    }
-
-    /**
-     * Insert Net Cart Orders tab into My Account menu.
-     *
-     * @param array $items Menu items.
-     * @return array
-     */
-    public function add_menu_items( $items ) {
-        $new_items = array();
+    public function add_menu_item( $items ) {
+        $new = array();
         foreach ( $items as $key => $label ) {
-            $new_items[ $key ] = $label;
-            // Insert after "Orders".
-            if ( 'orders' === $key ) {
-                $new_items[ self::ENDPOINT ] = __( 'Net Cart Orders', 'zinckles-net-cart' );
+            $new[ $key ] = $label;
+            if ( $key === 'orders' ) {
+                $new['net-cart-orders'] = __( 'Net Cart Orders', 'zinckles-net-cart' );
             }
         }
-        return $new_items;
+        return $new;
     }
 
-    /**
-     * Set page title for endpoints.
-     *
-     * @param string $title Page title.
-     * @param int    $id    Post ID.
-     * @return string
-     */
-    public function endpoint_title( $title, $id = 0 ) {
-        if ( ! is_admin() && is_main_query() && in_the_loop() && is_account_page() ) {
-            global $wp_query;
-            if ( isset( $wp_query->query_vars[ self::ENDPOINT ] ) ) {
-                return __( 'Net Cart Orders', 'zinckles-net-cart' );
-            }
-            if ( isset( $wp_query->query_vars[ self::DETAIL_ENDPOINT ] ) ) {
-                return __( 'Net Cart Order Details', 'zinckles-net-cart' );
-            }
-        }
-        return $title;
-    }
-
-    /**
-     * Enqueue front-end assets on My Account pages.
-     */
-    public function enqueue_assets() {
-        if ( ! is_account_page() ) {
+    public function render_orders_tab() {
+        $user_id = get_current_user_id();
+        if ( ! $user_id ) {
+            echo '<p>' . esc_html__( 'Please log in.', 'zinckles-net-cart' ) . '</p>';
             return;
         }
 
-        wp_enqueue_style(
-            'znc-my-account',
-            ZNC_PLUGIN_URL . 'assets/css/znc-my-account.css',
-            array(),
-            ZNC_VERSION
-        );
+        $orders = $this->get_net_cart_orders( $user_id );
 
-        wp_enqueue_script(
-            'znc-my-account',
-            ZNC_PLUGIN_URL . 'assets/js/znc-my-account.js',
-            array( 'jquery' ),
-            ZNC_VERSION,
-            true
-        );
+        echo '<div class="znc-my-orders">';
+        echo '<h3>' . esc_html__( 'Net Cart Orders', 'zinckles-net-cart' ) . '</h3>';
+        echo '<p class="znc-orders-desc">' . esc_html__( 'Orders placed through the unified Net Cart across all shops.', 'zinckles-net-cart' ) . '</p>';
 
-        wp_localize_script( 'znc-my-account', 'zncMyAccount', array(
-            'ajaxUrl'  => admin_url( 'admin-ajax.php' ),
-            'nonce'    => wp_create_nonce( 'znc_my_account' ),
-            'i18n'     => array(
-                'loading'    => __( 'Loading order details...', 'zinckles-net-cart' ),
-                'error'      => __( 'Could not load order details.', 'zinckles-net-cart' ),
-                'noOrders'   => __( 'No Net Cart orders found.', 'zinckles-net-cart' ),
-                'viewDetail' => __( 'View Details', 'zinckles-net-cart' ),
-                'allShops'   => __( 'All Shops', 'zinckles-net-cart' ),
-                'allStatus'  => __( 'All Statuses', 'zinckles-net-cart' ),
-                'allCurrency'=> __( 'All Currencies', 'zinckles-net-cart' ),
-            ),
+        if ( empty( $orders ) ) {
+            echo '<div class="znc-no-orders"><span>&#x1F4E6;</span>';
+            echo '<p>' . esc_html__( 'No Net Cart orders yet.', 'zinckles-net-cart' ) . '</p></div></div>';
+            return;
+        }
+
+        // Stats
+        $total_spent = $total_zcreds = 0;
+        $shops = array();
+        foreach ( $orders as $o ) {
+            $total_spent  += floatval( $o->get_total() );
+            $total_zcreds += floatval( $o->get_meta( '_znc_zcreds_deducted', true ) );
+            $cm = $o->get_meta( '_znc_child_orders', true );
+            if ( is_array( $cm ) ) foreach ( $cm as $c ) $shops[ $c['blog_id'] ?? 0 ] = true;
+        }
+
+        echo '<div class="znc-order-stats">';
+        echo '<div class="znc-stat"><span class="znc-stat-val">' . count($orders) . '</span><span class="znc-stat-lbl">Orders</span></div>';
+        echo '<div class="znc-stat"><span class="znc-stat-val">' . wc_price($total_spent) . '</span><span class="znc-stat-lbl">Total Spent</span></div>';
+        echo '<div class="znc-stat"><span class="znc-stat-val">' . count($shops) . '</span><span class="znc-stat-lbl">Shops</span></div>';
+        if ( $total_zcreds > 0 ) {
+            echo '<div class="znc-stat"><span class="znc-stat-val">&#x26A1; ' . number_format($total_zcreds) . '</span><span class="znc-stat-lbl">ZCreds Used</span></div>';
+        }
+        echo '</div>';
+
+        // Orders list
+        echo '<div class="znc-orders-list">';
+        foreach ( $orders as $order ) {
+            $oid       = $order->get_id();
+            $date      = $order->get_date_created()->date_i18n( get_option('date_format') );
+            $status    = $order->get_status();
+            $total     = $order->get_total();
+            $curr      = $order->get_currency();
+            $child_map = $order->get_meta( '_znc_child_orders', true ) ?: array();
+            $zc_used   = floatval( $order->get_meta( '_znc_zcreds_deducted', true ) );
+            $zc_earned = floatval( $order->get_meta( '_znc_zcreds_earned', true ) );
+            $is_mixed  = $order->get_meta( '_znc_mixed_currency', true );
+            $breakdown = $order->get_meta( '_znc_currency_breakdown', true ) ?: array();
+            $payment   = $order->get_payment_method_title();
+
+            echo '<div class="znc-order-card">';
+
+            // Header
+            echo '<div class="znc-order-header">';
+            echo '<div><strong>#' . esc_html($oid) . '</strong> <span class="znc-date">' . esc_html($date) . '</span></div>';
+            echo '<div class="znc-badges">';
+            echo '<span class="znc-status znc-status-' . esc_attr($status) . '">' . esc_html( wc_get_order_status_name($status) ) . '</span>';
+            if ( $is_mixed ) echo '<span class="znc-badge-mixed">&#x1F310; Mixed Currency</span>';
+            echo '</div></div>';
+
+            // Shop badges
+            if ( ! empty( $child_map ) ) {
+                echo '<div class="znc-shop-badges">';
+                foreach ( $child_map as $child ) {
+                    $sn = $child['shop_name'] ?? 'Shop #' . ($child['blog_id'] ?? '?');
+                    $sc = $child['currency'] ?? $curr;
+                    $ss = $child['status'] ?? $status;
+                    echo '<div class="znc-shop-badge">';
+                    echo '<span class="znc-shop-init">' . esc_html(mb_substr($sn,0,1)) . '</span>';
+                    echo '<span>' . esc_html($sn) . '</span>';
+                    echo '<span class="znc-shop-curr">' . esc_html($sc) . '</span>';
+                    echo '<span class="znc-status znc-status-' . esc_attr($ss) . '">' . esc_html(ucfirst($ss)) . '</span>';
+                    echo '</div>';
+                }
+                echo '</div>';
+            }
+
+            // Payment line
+            echo '<div class="znc-order-payment">';
+            echo '<span class="znc-total">' . wc_price($total, array('currency'=>$curr)) . '</span>';
+            if ( $zc_used > 0 ) echo '<span class="znc-zc-chip znc-zc-used">&#x26A1; -' . number_format($zc_used) . ' ZCreds</span>';
+            if ( $zc_earned > 0 ) echo '<span class="znc-zc-chip znc-zc-earned">&#x26A1; +' . number_format($zc_earned) . ' earned</span>';
+            if ( $payment ) echo '<span class="znc-pm">' . esc_html($payment) . '</span>';
+            echo '</div>';
+
+            // Currency breakdown
+            if ( count($breakdown) > 1 ) {
+                echo '<div class="znc-curr-break">';
+                foreach ( $breakdown as $cc => $cd ) {
+                    $amt = is_array($cd) ? ($cd['total'] ?? 0) : $cd;
+                    echo '<span class="znc-curr-chip">' . wc_price($amt,array('currency'=>$cc)) . ' ' . esc_html($cc) . '</span>';
+                }
+                echo '</div>';
+            }
+
+            echo '<div class="znc-order-actions"><a href="' . esc_url(wc_get_endpoint_url('view-order',$oid,wc_get_page_permalink('myaccount'))) . '">' . esc_html__('View Details','zinckles-net-cart') . ' &rarr;</a></div>';
+            echo '</div>';
+        }
+        echo '</div></div>';
+    }
+
+    public function render_dashboard_widget() {
+        $orders = $this->get_net_cart_orders( get_current_user_id(), 3 );
+        if ( empty( $orders ) ) return;
+
+        echo '<div class="znc-dashboard-widget"><h3>&#x1F6D2; Recent Net Cart Orders</h3><ul>';
+        foreach ( $orders as $o ) {
+            $url = wc_get_endpoint_url('view-order',$o->get_id(),wc_get_page_permalink('myaccount'));
+            echo '<li><a href="' . esc_url($url) . '"><strong>#' . $o->get_id() . '</strong> ';
+            echo '<span>' . $o->get_date_created()->date_i18n('M j') . '</span> ';
+            echo wc_price($o->get_total(),array('currency'=>$o->get_currency()));
+            echo '</a></li>';
+        }
+        echo '</ul>';
+        echo '<a href="' . esc_url(wc_get_endpoint_url('net-cart-orders','',wc_get_page_permalink('myaccount'))) . '">View All &rarr;</a>';
+        echo '</div>';
+    }
+
+    private function get_net_cart_orders( $user_id, $limit = 20 ) {
+        if ( ! function_exists( 'wc_get_orders' ) ) return array();
+        return wc_get_orders( array(
+            'customer_id' => $user_id,
+            'meta_key'    => '_znc_is_parent_order',
+            'meta_value'  => '1',
+            'limit'       => $limit,
+            'orderby'     => 'date',
+            'order'       => 'DESC',
+            'status'      => array('wc-completed','wc-processing','wc-on-hold','wc-refunded','wc-pending'),
         ) );
     }
 
-    // ─── Render Methods ────────────────────────────────────────────
-
-    /**
-     * Render the main Net Cart Orders list page.
-     */
-    public function render_orders_page() {
-        $user_id      = get_current_user_id();
-        $current_page = max( 1, absint( get_query_var( 'paged', 1 ) ) );
-        $per_page     = 10;
-
-        // Filters.
-        $filters = array(
-            'shop_id'  => isset( $_GET['shop'] ) ? absint( $_GET['shop'] ) : 0,
-            'status'   => isset( $_GET['status'] ) ? sanitize_text_field( $_GET['status'] ) : '',
-            'currency' => isset( $_GET['currency'] ) ? sanitize_text_field( $_GET['currency'] ) : '',
-            'date_from'=> isset( $_GET['date_from'] ) ? sanitize_text_field( $_GET['date_from'] ) : '',
-            'date_to'  => isset( $_GET['date_to'] ) ? sanitize_text_field( $_GET['date_to'] ) : '',
-            'search'   => isset( $_GET['s'] ) ? sanitize_text_field( $_GET['s'] ) : '',
-        );
-
-        $result = $this->order_query->get_user_orders( $user_id, $current_page, $per_page, $filters );
-
-        // Available filter options.
-        $filter_options = $this->order_query->get_filter_options( $user_id );
-
-        // Stats summary.
-        $stats = $this->order_query->get_user_stats( $user_id );
-
-        include ZNC_PLUGIN_DIR . 'templates/myaccount/net-cart-orders.php';
-    }
-
-    /**
-     * Render single Net Cart order detail page.
-     */
-    public function render_order_detail() {
-        $parent_order_id = absint( get_query_var( self::DETAIL_ENDPOINT ) );
-        $user_id         = get_current_user_id();
-
-        if ( ! $parent_order_id ) {
-            wc_print_notice( __( 'Invalid order.', 'zinckles-net-cart' ), 'error' );
-            return;
-        }
-
-        $order_data = $this->order_query->get_order_detail( $parent_order_id, $user_id );
-
-        if ( is_wp_error( $order_data ) ) {
-            wc_print_notice( $order_data->get_error_message(), 'error' );
-            return;
-        }
-
-        include ZNC_PLUGIN_DIR . 'templates/myaccount/net-cart-order-detail.php';
-    }
-
-    /**
-     * Render dashboard widget showing recent Net Cart activity.
-     */
-    public function render_dashboard_widget() {
-        $user_id = get_current_user_id();
-        $stats   = $this->order_query->get_user_stats( $user_id );
-        $recent  = $this->order_query->get_user_orders( $user_id, 1, 3 );
-
-        include ZNC_PLUGIN_DIR . 'templates/myaccount/net-cart-dashboard.php';
-    }
-
-    /**
-     * Add "Net Cart" badge to standard WC orders that are Net Cart parent orders.
-     *
-     * @param WC_Order $order The order object.
-     */
-    public function add_netcart_badge( $order ) {
-        if ( $order->get_meta( '_znc_is_parent_order' ) === 'yes' ) {
-            $parent_id = $order->get_id();
-            $url = wc_get_account_endpoint_url( self::DETAIL_ENDPOINT ) . $parent_id . '/';
-            echo '<span class="znc-badge znc-badge--netcart">';
-            echo '<a href="' . esc_url( $url ) . '">' . esc_html__( 'Net Cart', 'zinckles-net-cart' ) . '</a>';
-            echo '</span>';
-        }
-    }
-
-    /**
-     * Invalidate user's order cache on status change.
-     *
-     * @param int    $order_id   Order ID.
-     * @param string $old_status Old status.
-     * @param string $new_status New status.
-     */
-    public function invalidate_cache( $order_id, $old_status, $new_status ) {
-        $order = wc_get_order( $order_id );
-        if ( $order && $order->get_meta( '_znc_is_parent_order' ) === 'yes' ) {
-            $user_id = $order->get_customer_id();
-            delete_transient( 'znc_user_stats_' . $user_id );
-            delete_transient( 'znc_user_filters_' . $user_id );
-        }
-    }
-
-    /**
-     * Flush rewrite rules.
-     */
-    public function flush_rewrites() {
-        $this->register_endpoints();
-        flush_rewrite_rules();
+    public function enqueue_styles() {
+        if ( ! function_exists('is_account_page') || ! is_account_page() ) return;
+        wp_enqueue_style( 'znc-my-account', ZNC_PLUGIN_URL . 'assets/css/znc-my-account.css', array(), ZNC_VERSION );
     }
 }

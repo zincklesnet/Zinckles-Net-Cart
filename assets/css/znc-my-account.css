@@ -1,278 +1,41 @@
-/**
- * Zinckles Net Cart — My Account Styles
- *
- * @package Zinckles_Net_Cart
- * @since   1.1.0
- */
-
-/* ── Variables ──────────────────────────────────────────── */
-:root {
-    --znc-primary: #7c3aed;
-    --znc-primary-light: #a78bfa;
-    --znc-primary-dark: #5b21b6;
-    --znc-success: #10b981;
-    --znc-warning: #f59e0b;
-    --znc-danger: #ef4444;
-    --znc-info: #3b82f6;
-    --znc-zcred: #f59e0b;
-    --znc-zcred-earn: #10b981;
-    --znc-bg: #faf9ff;
-    --znc-card: #ffffff;
-    --znc-border: #e5e2f0;
-    --znc-text: #1e1b4b;
-    --znc-text-muted: #6b7280;
-    --znc-radius: 12px;
-    --znc-radius-sm: 8px;
-    --znc-shadow: 0 1px 3px rgba(124,58,237,.08), 0 1px 2px rgba(0,0,0,.04);
-    --znc-shadow-lg: 0 4px 12px rgba(124,58,237,.1), 0 2px 4px rgba(0,0,0,.06);
-    --znc-transition: 0.2s ease;
-}
-
-/* ── Base ───────────────────────────────────────────────── */
-.znc-myaccount { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: var(--znc-text); }
-.znc-myaccount *, .znc-myaccount *::before, .znc-myaccount *::after { box-sizing: border-box; }
-.znc-myaccount h3 { font-size: 16px; font-weight: 700; margin: 0 0 16px; color: var(--znc-text); }
-
-/* ── Stats Bar ──────────────────────────────────────────── */
-.znc-stats-bar { display: flex; gap: 12px; margin-bottom: 24px; flex-wrap: wrap; }
-.znc-stat { flex: 1; min-width: 120px; background: var(--znc-card); border: 1px solid var(--znc-border); border-radius: var(--znc-radius-sm); padding: 16px; text-align: center; box-shadow: var(--znc-shadow); }
-.znc-stat__value { display: block; font-size: 24px; font-weight: 800; color: var(--znc-primary); line-height: 1.2; }
-.znc-stat__label { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--znc-text-muted); margin-top: 4px; }
-.znc-stat--zcred .znc-stat__value { color: var(--znc-zcred); }
-
-/* ── Filters ────────────────────────────────────────────── */
-.znc-filters { background: var(--znc-card); border: 1px solid var(--znc-border); border-radius: var(--znc-radius); padding: 20px; margin-bottom: 24px; box-shadow: var(--znc-shadow); }
-.znc-filters__row { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
-.znc-filter-group { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 140px; }
-.znc-filter-group label { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--znc-text-muted); font-weight: 600; }
-.znc-filter-group select, .znc-filter-group input { padding: 8px 12px; border: 1px solid var(--znc-border); border-radius: 6px; font-size: 13px; background: #fff; transition: border-color var(--znc-transition); }
-.znc-filter-group select:focus, .znc-filter-group input:focus { border-color: var(--znc-primary); outline: none; box-shadow: 0 0 0 3px rgba(124,58,237,.1); }
-.znc-filter-group--search { flex: 2; }
-.znc-filters__actions { display: flex; gap: 8px; }
-
-/* ── Buttons ────────────────────────────────────────────── */
-.znc-btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 18px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all var(--znc-transition); text-decoration: none; border: none; }
-.znc-btn--primary { background: var(--znc-primary); color: #fff; }
-.znc-btn--primary:hover { background: var(--znc-primary-dark); color: #fff; }
-.znc-btn--outline { background: transparent; border: 1px solid var(--znc-primary); color: var(--znc-primary); }
-.znc-btn--outline:hover { background: var(--znc-primary); color: #fff; }
-.znc-btn--filter { background: var(--znc-primary); color: #fff; }
-.znc-btn--clear { background: transparent; color: var(--znc-text-muted); text-decoration: underline; }
-
-/* ── Empty State ────────────────────────────────────────── */
-.znc-empty { text-align: center; padding: 60px 20px; background: var(--znc-card); border: 1px dashed var(--znc-border); border-radius: var(--znc-radius); }
-.znc-empty__icon { font-size: 48px; margin-bottom: 16px; }
-.znc-empty h3 { font-size: 20px; margin-bottom: 8px; }
-.znc-empty p { color: var(--znc-text-muted); margin-bottom: 20px; }
-
-/* ── Order Card ─────────────────────────────────────────── */
-.znc-orders-list { display: flex; flex-direction: column; gap: 16px; }
-.znc-order-card { background: var(--znc-card); border: 1px solid var(--znc-border); border-radius: var(--znc-radius); overflow: hidden; box-shadow: var(--znc-shadow); transition: box-shadow var(--znc-transition); }
-.znc-order-card:hover { box-shadow: var(--znc-shadow-lg); }
-
-.znc-order-card__header { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid var(--znc-border); flex-wrap: wrap; gap: 8px; }
-.znc-order-card__id { font-size: 16px; font-weight: 700; }
-.znc-order-card__id a { color: var(--znc-primary); text-decoration: none; }
-.znc-order-card__id a:hover { text-decoration: underline; }
-.znc-order-card__meta { display: flex; align-items: center; gap: 12px; font-size: 13px; }
-.znc-order-card__date { color: var(--znc-text-muted); }
-
-/* Status badges */
-.znc-order-card__status { display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
-.znc-status--completed { background: #ecfdf5; color: #065f46; }
-.znc-status--processing { background: #eff6ff; color: #1e40af; }
-.znc-status--on-hold { background: #fffbeb; color: #92400e; }
-.znc-status--pending { background: #fef3c7; color: #92400e; }
-.znc-status--cancelled { background: #fef2f2; color: #991b1b; }
-.znc-status--refunded { background: #f5f3ff; color: #5b21b6; }
-.znc-status--failed { background: #fef2f2; color: #991b1b; }
-
-/* Badges */
-.znc-badge { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; margin-left: 8px; }
-.znc-badge--mixed { background: linear-gradient(135deg, #7c3aed, #3b82f6); color: #fff; }
-.znc-badge--netcart { background: var(--znc-primary); color: #fff; }
-.znc-badge--netcart a { color: #fff; text-decoration: none; }
-
-/* ── Shop Badges ────────────────────────────────────────── */
-.znc-order-card__shops { display: flex; gap: 8px; padding: 12px 20px; flex-wrap: wrap; border-bottom: 1px solid var(--znc-border); }
-.znc-shop-badge { display: flex; align-items: center; gap: 8px; padding: 8px 14px; background: color-mix(in srgb, var(--shop-color) 8%, white); border: 1px solid color-mix(in srgb, var(--shop-color) 20%, white); border-radius: var(--znc-radius-sm); font-size: 13px; transition: all var(--znc-transition); }
-.znc-shop-badge:hover { border-color: var(--shop-color); box-shadow: 0 0 0 3px color-mix(in srgb, var(--shop-color) 10%, transparent); }
-.znc-shop-badge__icon { width: 20px; height: 20px; border-radius: 50%; object-fit: cover; }
-.znc-shop-badge__initial { width: 20px; height: 20px; border-radius: 50%; background: var(--shop-color); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; flex-shrink: 0; }
-.znc-shop-badge__name { font-weight: 600; color: var(--znc-text); }
-.znc-shop-badge__count { color: var(--znc-text-muted); font-size: 12px; }
-.znc-shop-badge__currency { padding: 1px 6px; background: rgba(0,0,0,.06); border-radius: 4px; font-size: 11px; font-weight: 600; color: var(--znc-text-muted); }
-.znc-shop-badge__status { font-size: 10px; }
-
-/* ── Payment Row ────────────────────────────────────────── */
-.znc-order-card__payment { display: flex; justify-content: space-between; align-items: center; padding: 12px 20px; flex-wrap: wrap; gap: 8px; }
-.znc-payment-breakdown { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.znc-payment-total { font-size: 18px; font-weight: 800; color: var(--znc-text); }
-.znc-payment-currencies { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-.znc-currency-chip { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; background: #f0f0ff; border-radius: 6px; font-size: 13px; }
-.znc-currency-chip__symbol { font-weight: 700; }
-.znc-currency-chip__code { font-size: 10px; color: var(--znc-text-muted); text-transform: uppercase; }
-.znc-payment-converted { font-weight: 700; color: var(--znc-primary); font-size: 15px; }
-.znc-payment-method__label { font-size: 12px; color: var(--znc-text-muted); }
-
-/* ZCred chips */
-.znc-zcred-chip { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 6px; font-size: 13px; font-weight: 600; }
-.znc-zcred-chip--used { background: #fef3c7; color: #92400e; }
-.znc-zcred-chip--earned { background: #ecfdf5; color: #065f46; }
-.znc-zcred-icon { font-size: 14px; }
-.znc-zcred-label { font-size: 11px; font-weight: 400; opacity: .8; }
-
-/* ── Card Footer ────────────────────────────────────────── */
-.znc-order-card__footer { display: flex; justify-content: space-between; align-items: center; padding: 12px 20px; background: #faf9ff; border-top: 1px solid var(--znc-border); }
-.znc-order-card__summary { font-size: 13px; color: var(--znc-text-muted); }
-
-/* ── Pagination ─────────────────────────────────────────── */
-.znc-pagination { display: flex; justify-content: center; gap: 4px; margin-top: 24px; }
-.znc-pagination__page { display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 6px; font-size: 14px; font-weight: 600; color: var(--znc-text-muted); text-decoration: none; border: 1px solid var(--znc-border); transition: all var(--znc-transition); }
-.znc-pagination__page:hover { border-color: var(--znc-primary); color: var(--znc-primary); }
-.znc-pagination__page--active { background: var(--znc-primary); color: #fff; border-color: var(--znc-primary); }
-
-/* ── Order Detail Page ──────────────────────────────────── */
-.znc-back-link { display: inline-flex; align-items: center; gap: 4px; color: var(--znc-primary); text-decoration: none; font-size: 14px; margin-bottom: 20px; }
-.znc-back-link:hover { text-decoration: underline; }
-
-.znc-detail-header { margin-bottom: 24px; }
-.znc-detail-header__title { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
-.znc-detail-header__title h2 { font-size: 24px; font-weight: 800; margin: 0; }
-.znc-detail-header__meta { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--znc-text-muted); }
-
-/* Detail cards */
-.znc-detail-card { background: var(--znc-card); border: 1px solid var(--znc-border); border-radius: var(--znc-radius); padding: 24px; margin-bottom: 20px; box-shadow: var(--znc-shadow); }
-
-/* ── Payment Summary ────────────────────────────────────── */
-.znc-payment-grid { display: flex; flex-direction: column; gap: 12px; }
-.znc-payment-row { display: flex; align-items: center; gap: 16px; padding: 12px 16px; border-radius: var(--znc-radius-sm); }
-.znc-payment-row--monetary { background: #f0f0ff; }
-.znc-payment-row--zcred { background: #fef3c7; }
-.znc-payment-row--earned { background: #ecfdf5; }
-.znc-payment-row__icon { font-size: 24px; flex-shrink: 0; }
-.znc-payment-row__details { display: flex; justify-content: space-between; align-items: center; flex: 1; flex-wrap: wrap; gap: 4px; }
-.znc-payment-row__label { font-size: 14px; font-weight: 600; }
-.znc-payment-row__rate { font-weight: 400; color: var(--znc-text-muted); }
-.znc-payment-row__amount { font-size: 16px; font-weight: 800; }
-.znc-payment-row__amount--zcred { color: #92400e; }
-.znc-payment-row__amount--earned { color: #065f46; }
-.znc-payment-row__amount small { font-size: 12px; font-weight: 400; opacity: .7; }
-
-/* ── Conversion Table ───────────────────────────────────── */
-.znc-conversion-table { width: 100%; border-collapse: collapse; font-size: 14px; }
-.znc-conversion-table th { text-align: left; padding: 10px 12px; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--znc-text-muted); border-bottom: 2px solid var(--znc-border); }
-.znc-conversion-table td { padding: 10px 12px; border-bottom: 1px solid var(--znc-border); }
-.znc-conversion-table tfoot td { border-bottom: none; border-top: 2px solid var(--znc-border); }
-.znc-currency-flag { margin-right: 4px; }
-
-/* ── Shop Sections ──────────────────────────────────────── */
-.znc-shops-section { margin-bottom: 20px; }
-.znc-shop-section { background: var(--znc-card); border: 1px solid var(--znc-border); border-radius: var(--znc-radius); overflow: hidden; margin-bottom: 16px; box-shadow: var(--znc-shadow); }
-
-.znc-shop-section__header { display: flex; align-items: center; gap: 14px; padding: 16px 20px; background: color-mix(in srgb, var(--shop-color) 5%, white); border-bottom: 2px solid color-mix(in srgb, var(--shop-color) 20%, white); }
-.znc-shop-section__badge { flex-shrink: 0; }
-.znc-shop-section__icon { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; border: 2px solid var(--shop-color); }
-.znc-shop-section__initial { width: 36px; height: 36px; border-radius: 50%; background: var(--shop-color); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 700; }
-.znc-shop-section__info { flex: 1; }
-.znc-shop-section__info h4 { font-size: 16px; font-weight: 700; margin: 0 0 4px; }
-.znc-shop-section__info h4 a { color: var(--znc-text); text-decoration: none; }
-.znc-shop-section__info h4 a:hover { color: var(--znc-primary); }
-.znc-shop-section__info h4 small { font-size: 11px; color: var(--znc-text-muted); }
-.znc-shop-section__meta { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.znc-shop-section__currency-badge { padding: 2px 8px; background: rgba(0,0,0,.06); border-radius: 4px; font-size: 12px; font-weight: 600; }
-.znc-shop-section__total { font-size: 20px; font-weight: 800; color: var(--znc-text); flex-shrink: 0; }
-
-/* ── Line Items ─────────────────────────────────────────── */
-.znc-shop-items { padding: 0; }
-.znc-line-item { display: flex; align-items: flex-start; gap: 14px; padding: 14px 20px; border-bottom: 1px solid var(--znc-border); }
-.znc-line-item:last-child { border-bottom: none; }
-.znc-line-item__image { flex-shrink: 0; width: 56px; height: 56px; border-radius: 8px; overflow: hidden; background: #f5f5f5; }
-.znc-line-item__image img { width: 100%; height: 100%; object-fit: cover; }
-.znc-line-item__placeholder { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 24px; }
-.znc-line-item__details { flex: 1; min-width: 0; }
-.znc-line-item__name { font-weight: 600; font-size: 14px; margin-bottom: 2px; }
-.znc-line-item__name a { color: var(--znc-text); text-decoration: none; }
-.znc-line-item__name a:hover { color: var(--znc-primary); }
-.znc-line-item__sku { display: block; font-size: 11px; color: var(--znc-text-muted); }
-.znc-line-item__attributes { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
-.znc-attribute { font-size: 12px; color: var(--znc-text-muted); }
-.znc-attribute__label { font-weight: 600; }
-.znc-line-item__meta { margin-top: 4px; }
-.znc-meta-item { display: block; font-size: 11px; color: var(--znc-text-muted); }
-.znc-line-item__qty { font-size: 14px; color: var(--znc-text-muted); font-weight: 600; flex-shrink: 0; min-width: 40px; text-align: center; }
-.znc-line-item__price { text-align: right; flex-shrink: 0; min-width: 100px; }
-.znc-line-item__unit { display: block; font-size: 12px; color: var(--znc-text-muted); }
-.znc-line-item__total { display: block; font-size: 15px; font-weight: 700; }
-.znc-line-item__tax { display: block; font-size: 11px; color: var(--znc-text-muted); }
-
-/* ── Shop Totals ────────────────────────────────────────── */
-.znc-shop-totals { padding: 12px 20px; background: #faf9ff; border-top: 1px solid var(--znc-border); }
-.znc-shop-totals__row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 14px; }
-.znc-shop-totals__row--discount { color: var(--znc-success); }
-.znc-shop-totals__row--total { font-weight: 800; font-size: 16px; padding-top: 8px; margin-top: 4px; border-top: 1px solid var(--znc-border); }
-.znc-shop-totals__row small { font-weight: 400; color: var(--znc-text-muted); margin-left: 4px; }
-.znc-shop-notes { padding: 12px 20px; background: #fffbeb; font-size: 13px; color: #92400e; }
-
-/* ── Timeline ───────────────────────────────────────────── */
-.znc-timeline { position: relative; padding-left: 28px; }
-.znc-timeline::before { content: ''; position: absolute; left: 8px; top: 4px; bottom: 4px; width: 2px; background: var(--znc-border); }
-.znc-timeline__event { position: relative; padding-bottom: 20px; }
-.znc-timeline__event:last-child { padding-bottom: 0; }
-.znc-timeline__dot { position: absolute; left: -24px; top: 4px; width: 12px; height: 12px; border-radius: 50%; background: var(--znc-border); border: 2px solid #fff; z-index: 1; }
-.znc-timeline--created .znc-timeline__dot { background: var(--znc-info); }
-.znc-timeline--payment .znc-timeline__dot { background: var(--znc-primary); }
-.znc-timeline--zcred .znc-timeline__dot { background: var(--znc-zcred); }
-.znc-timeline--completed .znc-timeline__dot { background: var(--znc-success); }
-.znc-timeline--zcred_earn .znc-timeline__dot { background: var(--znc-zcred-earn); }
-.znc-timeline--refund .znc-timeline__dot { background: var(--znc-danger); }
-.znc-timeline__label { font-weight: 700; font-size: 14px; margin-bottom: 2px; }
-.znc-timeline__detail { font-size: 13px; color: var(--znc-text-muted); }
-.znc-timeline__date { font-size: 12px; color: var(--znc-text-muted); margin-top: 2px; opacity: .7; }
-
-/* ── Addresses ──────────────────────────────────────────── */
-.znc-detail-addresses { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
-.znc-address-card address { font-style: normal; font-size: 14px; line-height: 1.6; color: var(--znc-text-muted); }
-
-/* ── Order Notes ────────────────────────────────────────── */
-.znc-note { padding: 10px 0; border-bottom: 1px solid var(--znc-border); }
-.znc-note:last-child { border-bottom: none; }
-.znc-note__date { font-size: 12px; color: var(--znc-text-muted); }
-.znc-note__content { font-size: 14px; margin: 4px 0 0; }
-
-/* ── Dashboard Widget ───────────────────────────────────── */
-.znc-dashboard-widget { background: var(--znc-card); border: 1px solid var(--znc-border); border-radius: var(--znc-radius); padding: 24px; margin-top: 24px; box-shadow: var(--znc-shadow); }
-.znc-dashboard-widget__title { font-size: 16px; font-weight: 700; margin: 0 0 16px; }
-
-.znc-dashboard-stats { display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
-.znc-dash-stat { flex: 1; min-width: 80px; text-align: center; padding: 10px; background: #faf9ff; border-radius: 8px; }
-.znc-dash-stat__value { display: block; font-size: 18px; font-weight: 800; color: var(--znc-primary); }
-.znc-dash-stat__label { display: block; font-size: 10px; text-transform: uppercase; letter-spacing: .04em; color: var(--znc-text-muted); margin-top: 2px; }
-.znc-dash-stat--zcred .znc-dash-stat__value { color: var(--znc-zcred); }
-
-.znc-dashboard-recent__list { display: flex; flex-direction: column; gap: 8px; }
-.znc-dashboard-order { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; background: #faf9ff; border-radius: 8px; text-decoration: none; color: var(--znc-text); transition: all var(--znc-transition); }
-.znc-dashboard-order:hover { background: #f0eeff; box-shadow: var(--znc-shadow); }
-.znc-dashboard-order__left { display: flex; flex-direction: column; gap: 2px; }
-.znc-dashboard-order__id { font-weight: 700; font-size: 14px; }
-.znc-dashboard-order__date { font-size: 11px; color: var(--znc-text-muted); }
-.znc-dashboard-order__right { display: flex; align-items: center; gap: 10px; }
-.znc-dashboard-order__shops { display: flex; gap: 2px; }
-.znc-mini-badge { width: 20px; height: 20px; border-radius: 50%; background: var(--shop-color); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; }
-.znc-dashboard-order__total { font-weight: 700; font-size: 14px; }
-.znc-zcred-mini { font-size: 10px; color: var(--znc-zcred); font-weight: 600; }
-.znc-dashboard-widget__link { display: block; text-align: center; margin-top: 16px; color: var(--znc-primary); font-weight: 600; font-size: 14px; text-decoration: none; }
-.znc-dashboard-widget__link:hover { text-decoration: underline; }
-
-/* ── Responsive ─────────────────────────────────────────── */
-@media (max-width: 768px) {
-    .znc-stats-bar { flex-direction: column; }
-    .znc-filters__row { flex-direction: column; }
-    .znc-order-card__header { flex-direction: column; align-items: flex-start; }
-    .znc-order-card__payment { flex-direction: column; align-items: flex-start; }
-    .znc-shop-section__header { flex-direction: column; align-items: flex-start; }
-    .znc-detail-addresses { grid-template-columns: 1fr; }
-    .znc-line-item { flex-wrap: wrap; }
-    .znc-line-item__price { text-align: left; width: 100%; margin-top: 8px; }
-    .znc-dashboard-order { flex-direction: column; align-items: flex-start; gap: 8px; }
-}
+.znc-my-orders{max-width:800px}
+.znc-orders-desc{color:#666;margin-bottom:20px}
+.znc-order-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:24px}
+.znc-stat{text-align:center;padding:16px;background:#f9f7ff;border:1px solid #e8e0f7;border-radius:10px}
+.znc-stat-val{display:block;font-size:22px;font-weight:700;color:#7c3aed}
+.znc-stat-lbl{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#888;margin-top:4px}
+.znc-order-card{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:20px;margin-bottom:16px;transition:box-shadow .2s}
+.znc-order-card:hover{box-shadow:0 4px 16px rgba(124,58,237,.1)}
+.znc-order-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px}
+.znc-date{color:#888;font-size:13px;margin-left:8px}
+.znc-badges{display:flex;gap:6px;flex-wrap:wrap}
+.znc-status{padding:3px 10px;border-radius:12px;font-size:11px;font-weight:600;text-transform:uppercase}
+.znc-status-completed{background:#dcfce7;color:#166534}
+.znc-status-processing{background:#dbeafe;color:#1e40af}
+.znc-status-on-hold{background:#fef3c7;color:#92400e}
+.znc-status-pending{background:#fef3c7;color:#92400e}
+.znc-status-refunded{background:#fce7f3;color:#9d174d}
+.znc-badge-mixed{background:#f0e7ff;color:#7c3aed;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:600}
+.znc-shop-badges{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.znc-shop-badge{display:flex;align-items:center;gap:6px;padding:6px 10px;background:#f9f7ff;border:1px solid #e8e0f7;border-radius:8px;font-size:12px}
+.znc-shop-init{width:24px;height:24px;border-radius:50%;background:linear-gradient(135deg,#7c3aed,#4f46e5);color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700}
+.znc-shop-curr{background:#e8e0f7;padding:2px 6px;border-radius:4px;font-size:10px;font-weight:600;color:#7c3aed}
+.znc-order-payment{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px}
+.znc-total{font-size:18px;font-weight:700;color:#1a1a2e}
+.znc-zc-chip{padding:3px 8px;border-radius:6px;font-size:12px;font-weight:600}
+.znc-zc-used{background:#fef3c7;color:#92400e}
+.znc-zc-earned{background:#dcfce7;color:#166534}
+.znc-pm{color:#888;font-size:12px}
+.znc-curr-break{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
+.znc-curr-chip{background:#f3f4f6;padding:4px 8px;border-radius:6px;font-size:12px;color:#374151}
+.znc-order-actions a{color:#7c3aed;font-size:13px;font-weight:600;text-decoration:none}
+.znc-order-actions a:hover{text-decoration:underline}
+.znc-no-orders{text-align:center;padding:40px 20px;color:#888}
+.znc-no-orders span{font-size:48px;display:block;margin-bottom:12px}
+.znc-dashboard-widget{background:#f9f7ff;border:1px solid #e8e0f7;border-radius:12px;padding:20px;margin-top:20px}
+.znc-dashboard-widget h3{margin-bottom:12px;color:#1a1145}
+.znc-dashboard-widget ul{list-style:none;padding:0;margin:0 0 12px}
+.znc-dashboard-widget li{padding:8px 0;border-bottom:1px solid #e8e0f7}
+.znc-dashboard-widget li:last-child{border-bottom:none}
+.znc-dashboard-widget a{color:#7c3aed;text-decoration:none;font-size:13px}
+.znc-dashboard-widget a:hover{text-decoration:underline}
