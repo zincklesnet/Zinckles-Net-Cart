@@ -1,7 +1,12 @@
 <?php
 /**
- * Network Diagnostics View — v1.4.1
+ * Network Diagnostics View — v1.4.2
  * System info, global cart stats, health checks.
+ *
+ * v1.4.2 FIX: MyCred/GamiPress detection now uses direct DB queries
+ *             via engine classes' detect_network_types() methods,
+ *             NOT function_exists() which fails in network admin context.
+ *             Added live detection section showing real-time availability.
  */
 defined( 'ABSPATH' ) || exit;
 
@@ -24,6 +29,21 @@ if ( $table_exists ) {
 }
 
 $enrolled = isset( $settings['enrolled_sites'] ) ? (array) $settings['enrolled_sites'] : array();
+
+// v1.4.2: Live detection via DB queries — works in network admin context
+$live_mycred_types    = array();
+$live_gamipress_types = array();
+
+if ( class_exists( 'ZNC_MyCred_Engine' ) && method_exists( 'ZNC_MyCred_Engine', 'detect_network_types' ) ) {
+    $live_mycred_types = ZNC_MyCred_Engine::detect_network_types();
+}
+if ( class_exists( 'ZNC_GamiPress_Engine' ) && method_exists( 'ZNC_GamiPress_Engine', 'detect_network_types' ) ) {
+    $live_gamipress_types = ZNC_GamiPress_Engine::detect_network_types();
+}
+
+// Order map table
+$map_table = $prefix . 'znc_order_map';
+$map_table_exists = (bool) $wpdb->get_var( "SHOW TABLES LIKE '{$map_table}'" );
 ?>
 <div class="wrap znc-admin-wrap">
     <h1><span class="dashicons dashicons-heart"></span> <?php esc_html_e( 'Net Cart — Diagnostics', 'zinckles-net-cart' ); ?></h1>
@@ -37,6 +57,10 @@ $enrolled = isset( $settings['enrolled_sites'] ) ? (array) $settings['enrolled_s
                 <td><?php echo $table_exists ? '<span style="color:#46b450;">✓ ' . esc_html( $table ) . '</span>' : '<span style="color:#dc3232;">✗ Table missing: ' . esc_html( $table ) . '</span>'; ?></td>
             </tr>
             <tr>
+                <td><?php esc_html_e( 'Order Map Table', 'zinckles-net-cart' ); ?></td>
+                <td><?php echo $map_table_exists ? '<span style="color:#46b450;">✓ ' . esc_html( $map_table ) . '</span>' : '<span style="color:#dc3232;">✗ Table missing: ' . esc_html( $map_table ) . '</span>'; ?></td>
+            </tr>
+            <tr>
                 <td><?php esc_html_e( 'Checkout Host', 'zinckles-net-cart' ); ?></td>
                 <td>Blog ID <?php echo esc_html( $host_id ); ?> — <?php echo esc_html( get_blog_option( $host_id, 'blogname' ) ); ?></td>
             </tr>
@@ -46,15 +70,81 @@ $enrolled = isset( $settings['enrolled_sites'] ) ? (array) $settings['enrolled_s
             </tr>
             <tr>
                 <td><?php esc_html_e( 'HMAC Secret', 'zinckles-net-cart' ); ?></td>
-                <td><?php echo ! empty( $settings['hmac_secret'] ) ? '<span style="color:#46b450;">✓ Configured</span>' : '<span style="color:#f0ad4e;">⚠ Not set</span>'; ?></td>
+                <td><?php echo ! empty( $settings['hmac_secret'] ) ? '<span style="color:#46b450;">✓ Configured (' . esc_html( substr( $settings['hmac_secret'], 0, 8 ) ) . '…)</span>' : '<span style="color:#f0ad4e;">⚠ Not set</span>'; ?></td>
+            </tr>
+        </table>
+    </div>
+
+    <!-- v1.4.2: Live Point Type Detection (DB-based) -->
+    <div class="znc-settings-section">
+        <h2><?php esc_html_e( 'Point Type Detection (Live)', 'zinckles-net-cart' ); ?></h2>
+        <p class="description"><?php esc_html_e( 'Real-time scan of all sites using direct database queries. This works regardless of whether plugins are loaded in network admin context.', 'zinckles-net-cart' ); ?></p>
+
+        <h3 style="margin-top:16px;"><?php esc_html_e( 'MyCred Types', 'zinckles-net-cart' ); ?></h3>
+        <?php if ( ! empty( $live_mycred_types ) ) : ?>
+        <table class="widefat striped">
+            <thead>
+                <tr>
+                    <th><?php esc_html_e( 'Slug', 'zinckles-net-cart' ); ?></th>
+                    <th><?php esc_html_e( 'Label', 'zinckles-net-cart' ); ?></th>
+                    <th><?php esc_html_e( 'Blog ID', 'zinckles-net-cart' ); ?></th>
+                    <th><?php esc_html_e( 'Configured?', 'zinckles-net-cart' ); ?></th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php foreach ( $live_mycred_types as $slug => $info ) :
+                    $is_configured = ! empty( $settings['mycred_types_config'][ $slug ] );
+                ?>
+                <tr>
+                    <td><code><?php echo esc_html( $slug ); ?></code></td>
+                    <td><?php echo esc_html( $info['label'] ?? $slug ); ?></td>
+                    <td><?php echo esc_html( $info['blog_id'] ?? '—' ); ?></td>
+                    <td><?php echo $is_configured ? '<span style="color:#46b450;">✓</span>' : '<span style="color:#f0ad4e;">⚠ Not saved</span>'; ?></td>
+                </tr>
+                <?php endforeach; ?>
+            </tbody>
+        </table>
+        <?php else : ?>
+        <p><span style="color:#999;"><?php esc_html_e( 'No MyCred point types found on any enrolled site.', 'zinckles-net-cart' ); ?></span></p>
+        <?php endif; ?>
+
+        <h3 style="margin-top:16px;"><?php esc_html_e( 'GamiPress Types', 'zinckles-net-cart' ); ?></h3>
+        <?php if ( ! empty( $live_gamipress_types ) ) : ?>
+        <table class="widefat striped">
+            <thead>
+                <tr>
+                    <th><?php esc_html_e( 'Slug', 'zinckles-net-cart' ); ?></th>
+                    <th><?php esc_html_e( 'Label', 'zinckles-net-cart' ); ?></th>
+                    <th><?php esc_html_e( 'Blog ID', 'zinckles-net-cart' ); ?></th>
+                    <th><?php esc_html_e( 'Configured?', 'zinckles-net-cart' ); ?></th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php foreach ( $live_gamipress_types as $slug => $info ) :
+                    $is_configured = ! empty( $settings['gamipress_types_config'][ $slug ] );
+                ?>
+                <tr>
+                    <td><code><?php echo esc_html( $slug ); ?></code></td>
+                    <td><?php echo esc_html( $info['label'] ?? $slug ); ?></td>
+                    <td><?php echo esc_html( $info['blog_id'] ?? '—' ); ?></td>
+                    <td><?php echo $is_configured ? '<span style="color:#46b450;">✓</span>' : '<span style="color:#f0ad4e;">⚠ Not saved</span>'; ?></td>
+                </tr>
+                <?php endforeach; ?>
+            </tbody>
+        </table>
+        <?php else : ?>
+        <p><span style="color:#999;"><?php esc_html_e( 'No GamiPress point types found on any enrolled site.', 'zinckles-net-cart' ); ?></span></p>
+        <?php endif; ?>
+
+        <h3 style="margin-top:16px;"><?php esc_html_e( 'Saved Configuration', 'zinckles-net-cart' ); ?></h3>
+        <table class="widefat striped">
+            <tr>
+                <td width="300"><?php esc_html_e( 'MyCred (Saved)', 'zinckles-net-cart' ); ?></td>
+                <td><?php echo ! empty( $settings['mycred_types_config'] ) ? count( $settings['mycred_types_config'] ) . ' type(s) configured' : '<span style="color:#999;">None saved — run Auto-Detect in Network Settings</span>'; ?></td>
             </tr>
             <tr>
-                <td><?php esc_html_e( 'MyCred Types', 'zinckles-net-cart' ); ?></td>
-                <td><?php echo ! empty( $settings['mycred_types_config'] ) ? count( $settings['mycred_types_config'] ) . ' type(s) configured' : '<span style="color:#999;">None detected</span>'; ?></td>
-            </tr>
-            <tr>
-                <td><?php esc_html_e( 'GamiPress Types', 'zinckles-net-cart' ); ?></td>
-                <td><?php echo ! empty( $settings['gamipress_types_config'] ) ? count( $settings['gamipress_types_config'] ) . ' type(s) configured' : '<span style="color:#999;">None detected</span>'; ?></td>
+                <td><?php esc_html_e( 'GamiPress (Saved)', 'zinckles-net-cart' ); ?></td>
+                <td><?php echo ! empty( $settings['gamipress_types_config'] ) ? count( $settings['gamipress_types_config'] ) . ' type(s) configured' : '<span style="color:#999;">None saved — run Auto-Detect in Network Settings</span>'; ?></td>
             </tr>
         </table>
     </div>

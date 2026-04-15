@@ -1,14 +1,37 @@
 <?php
 /**
- * Main Admin — v1.4.1
+ * Main Admin — v1.4.2
  * Admin page on the main/checkout-host site showing global cart stats.
+ *
+ * v1.4.2 FIX: Constructor accepts $store + $checkout_host params.
+ *             Quick Links use network_admin_url() for all network pages.
+ *             Capability changed to manage_options (more reliable than manage_woocommerce
+ *             since WooCommerce may not be active on all sites).
  */
 defined( 'ABSPATH' ) || exit;
 
 class ZNC_Main_Admin {
 
+    /** @var ZNC_Global_Cart_Store */
+    private $store;
+
+    /** @var ZNC_Checkout_Host */
+    private $host;
+
+    /**
+     * v1.4.2: Accept both $store and $host as constructor params.
+     *
+     * @param ZNC_Global_Cart_Store $store
+     * @param ZNC_Checkout_Host     $host
+     */
+    public function __construct( ZNC_Global_Cart_Store $store, ZNC_Checkout_Host $host ) {
+        $this->store = $store;
+        $this->host  = $host;
+    }
+
     public function init() {
-        if ( ! is_main_site() ) return;
+        // Show on the checkout host site (which may or may not be the main site)
+        if ( ! $this->host->is_current_site_host() ) return;
         add_action( 'admin_menu', array( $this, 'add_menu' ) );
     }
 
@@ -16,7 +39,7 @@ class ZNC_Main_Admin {
         add_menu_page(
             __( 'Zinckles Net Cart', 'zinckles-net-cart' ),
             __( 'Net Cart', 'zinckles-net-cart' ),
-            'manage_woocommerce',
+            'manage_options',
             'znc-main-admin',
             array( $this, 'render_page' ),
             'dashicons-cart',
@@ -27,7 +50,7 @@ class ZNC_Main_Admin {
     public function render_page() {
         global $wpdb;
         $settings = get_site_option( 'znc_network_settings', array() );
-        $host_id  = isset( $settings['checkout_host_id'] ) ? (int) $settings['checkout_host_id'] : get_main_site_id();
+        $host_id  = $this->host->get_host_id();
         $prefix   = $wpdb->get_blog_prefix( $host_id );
         $table    = $prefix . 'znc_global_cart';
 
@@ -79,7 +102,7 @@ class ZNC_Main_Admin {
                 <h2><?php esc_html_e( 'Version Info', 'zinckles-net-cart' ); ?></h2>
                 <table class="widefat striped">
                     <tr><td><?php esc_html_e( 'Plugin Version', 'zinckles-net-cart' ); ?></td><td><strong><?php echo esc_html( ZNC_VERSION ); ?></strong></td></tr>
-                    <tr><td><?php esc_html_e( 'Checkout Host', 'zinckles-net-cart' ); ?></td><td>Blog ID <?php echo esc_html( $host_id ); ?></td></tr>
+                    <tr><td><?php esc_html_e( 'Checkout Host', 'zinckles-net-cart' ); ?></td><td>Blog ID <?php echo esc_html( $host_id ); ?> — <?php echo esc_html( get_blog_option( $host_id, 'blogname' ) ); ?></td></tr>
                     <tr><td><?php esc_html_e( 'DB Table', 'zinckles-net-cart' ); ?></td><td><?php echo $table_exists ? '<span style="color:#46b450;">✓ Exists</span>' : '<span style="color:#dc3232;">✗ Missing</span>'; ?></td></tr>
                     <tr><td><?php esc_html_e( 'Base Currency', 'zinckles-net-cart' ); ?></td><td><?php echo esc_html( $settings['base_currency'] ?? 'USD' ); ?></td></tr>
                 </table>

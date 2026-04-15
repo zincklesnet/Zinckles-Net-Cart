@@ -1,7 +1,10 @@
 <?php
 /**
- * Checkout Host Resolver — v1.4.1
+ * Checkout Host Resolver — v1.4.2
  * Cached URL resolution, enrollment management, admin helpers.
+ *
+ * v1.4.2 FIX: Changed GamiPress post_type from 'point-type' to 'points-type'
+ *             in get_all_sites_for_admin().
  */
 defined( 'ABSPATH' ) || exit;
 
@@ -183,7 +186,8 @@ class ZNC_Checkout_Host {
             $prefix = $wpdb->get_blog_prefix( $sid );
             $has_wc = (bool) $wpdb->get_var( "SELECT option_value FROM {$prefix}options WHERE option_name = 'woocommerce_version' LIMIT 1" );
             $has_mycred = (bool) $wpdb->get_var( "SELECT option_value FROM {$prefix}options WHERE option_name = 'mycred_pref_core' LIMIT 1" );
-            $has_gp = (bool) $wpdb->get_var( "SELECT COUNT(*) FROM {$prefix}posts WHERE post_type = 'point-type' AND post_status = 'publish'" );
+            // v1.4.2 FIX: GamiPress uses 'points-type' (plural), not 'point-type'
+            $has_gp = (bool) $wpdb->get_var( "SELECT COUNT(*) FROM {$prefix}posts WHERE post_type = 'points-type' AND post_status = 'publish'" );
             $product_count = $has_wc ? (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$prefix}posts WHERE post_type = 'product' AND post_status = 'publish'" ) : 0;
             $results[] = array(
                 'blog_id'       => $sid,

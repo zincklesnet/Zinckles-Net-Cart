@@ -1,9 +1,13 @@
 <?php
 /**
- * GamiPress Engine — v1.4.1 NEW
+ * GamiPress Engine — v1.4.2
  *
  * Detects all GamiPress point types across the multisite network,
  * provides balance checks, deductions, and refunds.
+ *
+ * v1.4.2 FIX: Changed post_type from 'point-type' to 'points-type'
+ *             (GamiPress registers 'points-type' — plural with 's').
+ *             Added detect_network_types() for cross-site scanning.
  */
 defined( 'ABSPATH' ) || exit;
 
@@ -43,10 +47,10 @@ class ZNC_GamiPress_Engine {
             $blog_id = (int) $blog_id;
             $prefix  = $wpdb->get_blog_prefix( $blog_id );
 
-            // GamiPress stores point types as 'point-type' post type
+            // v1.4.2 FIX: GamiPress uses 'points-type' (plural with 's'), NOT 'point-type'
             $rows = $wpdb->get_results(
                 "SELECT post_name, post_title FROM {$prefix}posts 
-                 WHERE post_type = 'point-type' AND post_status = 'publish'"
+                 WHERE post_type = 'points-type' AND post_status = 'publish'"
             );
 
             if ( $rows ) {
@@ -56,7 +60,7 @@ class ZNC_GamiPress_Engine {
                         // Get singular name from postmeta
                         $singular = $wpdb->get_var( $wpdb->prepare(
                             "SELECT meta_value FROM {$prefix}postmeta 
-                             WHERE post_id = (SELECT ID FROM {$prefix}posts WHERE post_name = %s AND post_type = 'point-type' LIMIT 1)
+                             WHERE post_id = (SELECT ID FROM {$prefix}posts WHERE post_name = %s AND post_type = 'points-type' LIMIT 1)
                              AND meta_key = '_gamipress_singular_name' LIMIT 1",
                             $slug
                         ) );
@@ -69,6 +73,60 @@ class ZNC_GamiPress_Engine {
                             'source'   => 'subsite_' . $blog_id,
                         );
                     }
+                }
+            }
+        }
+
+        return $types;
+    }
+
+    /**
+     * Detect all GamiPress point types across the entire network.
+     * Scans ALL enrolled sites + main site via direct DB queries.
+     * Mirror of ZNC_MyCred_Engine::detect_network_types().
+     *
+     * @since 1.4.2
+     * @return array Array of [ slug => [ slug, label, singular, plural, blog_id ] ]
+     */
+    public static function detect_network_types() {
+        global $wpdb;
+        $types = array();
+
+        $settings = get_site_option( 'znc_network_settings', array() );
+        $enrolled = isset( $settings['enrolled_sites'] ) ? (array) $settings['enrolled_sites'] : array();
+
+        // Always include the main site
+        $main_id = get_main_site_id();
+        $all_ids = array_unique( array_merge( array( $main_id ), array_map( 'intval', $enrolled ) ) );
+
+        foreach ( $all_ids as $blog_id ) {
+            $blog_id = (int) $blog_id;
+            $prefix  = $wpdb->get_blog_prefix( $blog_id );
+
+            // v1.4.2 FIX: 'points-type' not 'point-type'
+            $rows = $wpdb->get_results(
+                "SELECT ID, post_name, post_title FROM {$prefix}posts 
+                 WHERE post_type = 'points-type' AND post_status = 'publish'"
+            );
+
+            if ( $rows ) {
+                foreach ( $rows as $row ) {
+                    $slug = $row->post_name;
+                    if ( isset( $types[ $slug ] ) ) continue; // first-found wins
+
+                    $singular = $wpdb->get_var( $wpdb->prepare(
+                        "SELECT meta_value FROM {$prefix}postmeta 
+                         WHERE post_id = %d AND meta_key = '_gamipress_singular_name' LIMIT 1",
+                        $row->ID
+                    ) );
+
+                    $types[ $slug ] = array(
+                        'slug'     => $slug,
+                        'label'    => $row->post_title,
+                        'singular' => $singular ?: $row->post_title,
+                        'plural'   => $row->post_title,
+                        'blog_id'  => $blog_id,
+                    );
                 }
             }
         }

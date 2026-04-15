@@ -5,7 +5,7 @@
  * Description: Unified multisite cart — aggregate WooCommerce products from multiple subsites
  *              into a single checkout with configurable checkout host, mixed currency support,
  *              MyCred/GamiPress integration, parent/child orders, inventory sync, widgets & shortcodes.
- * Version:     1.4.1
+ * Version:     1.4.2
  * Author:      Zinckles
  * Author URI:  https://zinckles.com
  * License:     GPL-2.0-or-later
@@ -32,11 +32,11 @@ if ( $znc_mem_limit && $znc_mem_limit !== '-1' ) {
 }
 
 /* ── Constants ────────────────────────────────────────────────── */
-define( 'ZNC_VERSION',     '1.4.1' );
+define( 'ZNC_VERSION',     '1.4.2' );
 define( 'ZNC_PLUGIN_FILE', __FILE__ );
 define( 'ZNC_PLUGIN_DIR',  plugin_dir_path( __FILE__ ) );
 define( 'ZNC_PLUGIN_URL',  plugin_dir_url( __FILE__ ) );
-define( 'ZNC_DB_VERSION',  '1.4.1' );
+define( 'ZNC_DB_VERSION',  '1.4.2' );
 
 /* ── Autoloader ───────────────────────────────────────────────── */
 require_once ZNC_PLUGIN_DIR . 'includes/class-znc-autoloader.php';
@@ -57,29 +57,21 @@ function znc_bootstrap() {
     $checkout_host = new ZNC_Checkout_Host();
 
     /*
-     * ── CRITICAL FIX v1.4.0 ─────────────────────────────────────
-     * AJAX handlers MUST be registered on ALL admin requests,
-     * because admin-ajax.php runs in a context where
-     * is_network_admin() returns FALSE.
-     *
-     * Menu pages are still only added in network_admin context.
+     * ── AJAX handlers MUST register on ALL admin/ajax contexts ──
+     * admin-ajax.php is NOT network_admin, so handlers registered
+     * only in is_network_admin() will never fire.
      */
     if ( is_admin() || wp_doing_ajax() ) {
         ZNC_Network_Admin::register_ajax_handlers();
     }
 
-    /*
-     * ── FIX v1.4.1 — Admin asset loading ────────────────────────
-     * ZNC_Admin_Loader must initialize on ALL admin contexts
-     * (network admin, main site admin, subsite admin) so that
-     * CSS/JS loads on Net Cart pages and AJAX handlers can fire.
-     */
+    /* ── Admin asset loading ──────────────────────────────────── */
     if ( is_admin() || is_network_admin() ) {
         $admin_loader = new ZNC_Admin_Loader();
         $admin_loader->init();
     }
 
-    /* ── Network Admin menu pages ─────────────────────────────── */
+    /* ── Network Admin menu pages (only in network admin) ─────── */
     if ( is_network_admin() ) {
         ZNC_Network_Admin::init_menus();
         return;
@@ -117,6 +109,7 @@ function znc_bootstrap() {
             $subsite_admin = new ZNC_Subsite_Admin( $checkout_host );
             $subsite_admin->init();
         }
+
         return;
     }
 
@@ -124,19 +117,7 @@ function znc_bootstrap() {
     if ( $is_host ) {
         ZNC_Shortcodes::init( $checkout_host );
 
-        /*
-         * ── FIX v1.4.1 — Constructor argument mismatches ────────
-         *
-         * BUG #1: ZNC_Global_Cart_Store requires ZNC_Checkout_Host.
-         *         v1.4.0 passed ZERO arguments → fatal TypeError.
-         *
-         * BUG #2: ZNC_Checkout_Orchestrator expects (Store, Host).
-         *         v1.4.0 passed (Store, Merger, Currency, …) → fatal TypeError.
-         *
-         * BUG #3: ZNC_REST_Endpoints requires ZNC_REST_Auth.
-         *         v1.4.0 passed ZERO arguments AND created $auth AFTER $rest.
-         */
-        $store = new ZNC_Global_Cart_Store( $checkout_host );  // FIX #1: was new ZNC_Global_Cart_Store()
+        $store = new ZNC_Global_Cart_Store( $checkout_host );
         $store->init();
 
         $currency = new ZNC_Currency_Handler();
@@ -148,7 +129,7 @@ function znc_bootstrap() {
         $gamipress = new ZNC_GamiPress_Engine();
         $gamipress->init();
 
-        $merger = new ZNC_Global_Cart_Merger( $store );  // FIX: removed unused $currency arg
+        $merger = new ZNC_Global_Cart_Merger( $store );
         $merger->init();
 
         $inventory = new ZNC_Inventory_Sync();
@@ -157,27 +138,28 @@ function znc_bootstrap() {
         $orders = new ZNC_Order_Factory();
         $orders->init();
 
-        $checkout = new ZNC_Checkout_Orchestrator( $store, $checkout_host );  // FIX #2: was ($store, $merger, $currency, $mycred, $orders, $inventory)
+        $checkout = new ZNC_Checkout_Orchestrator( $store, $checkout_host );
         $checkout->init();
 
         $my_account = new ZNC_My_Account( $checkout_host );
         $my_account->init();
 
+        /* Cart snapshot on host too — so host-site add-to-cart also goes to global cart */
         $snapshot = new ZNC_Cart_Snapshot( $checkout_host );
         $snapshot->init();
 
         if ( is_admin() ) {
-            $main_admin = new ZNC_Main_Admin( $store );
+            $main_admin = new ZNC_Main_Admin( $store, $checkout_host );
             $main_admin->init();
         }
     }
 
     /* ── REST endpoints — all enrolled sites + host ───────────── */
     if ( $is_host || $is_enrolled ) {
-        $auth = new ZNC_REST_Auth();       // FIX #3: moved BEFORE $rest
+        $auth = new ZNC_REST_Auth();
         $auth->init();
 
-        $rest = new ZNC_REST_Endpoints( $auth );  // FIX #3: was new ZNC_REST_Endpoints()
+        $rest = new ZNC_REST_Endpoints( $auth );
         $rest->init();
     }
 
@@ -187,16 +169,24 @@ function znc_bootstrap() {
         if ( current_user_can( 'manage_options' ) ) {
             $wp_admin_bar->add_node( array(
                 'id'    => 'znc-net-cart',
-                'title' => '🛒 Net Cart',
+                'title' => "\xF0\x9F\x9B\x92 Net Cart",
                 'href'  => $is_host
-                    ? admin_url( 'admin.php?page=znc-settings' )
+                    ? admin_url( 'admin.php?page=znc-main-admin' )
                     : admin_url( 'admin.php?page=znc-subsite' ),
             ) );
+            if ( is_super_admin() ) {
+                $wp_admin_bar->add_node( array(
+                    'id'     => 'znc-network-settings',
+                    'parent' => 'znc-net-cart',
+                    'title'  => '⚙ Network Settings',
+                    'href'   => network_admin_url( 'admin.php?page=znc-network' ),
+                ) );
+            }
         }
         $wp_admin_bar->add_node( array(
             'id'     => 'znc-view-cart',
             'parent' => current_user_can( 'manage_options' ) ? 'znc-net-cart' : null,
-            'title'  => '🛍 View Global Cart',
+            'title'  => "\xF0\x9F\x9B\x8D View Global Cart",
             'href'   => $checkout_host->get_cart_url(),
         ) );
     }, 100 );
