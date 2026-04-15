@@ -1,10 +1,54 @@
-.znc-admin-wrap{max-width:900px}
-.znc-admin-wrap h1{color:#1d2327;border-bottom:2px solid #7c3aed;padding-bottom:10px;margin-bottom:20px}
-.znc-admin-wrap h2{color:#7c3aed;margin-top:24px;margin-bottom:8px;font-size:16px}
-.znc-status-badge{display:inline-block;padding:3px 10px;border-radius:12px;font-size:12px;font-weight:600}
-.znc-enrolled{background:#d1fae5;color:#065f46}
-.znc-not-enrolled{background:#fef3c7;color:#92400e}
-.znc-tag{display:inline-block;background:#ede9fe;color:#5b21b6;padding:2px 10px;border-radius:10px;font-size:12px;margin:2px}
-.znc-admin-wrap .button{margin-right:4px}
-.znc-admin-wrap .form-table th{width:180px;font-weight:600}
-.znc-admin-wrap .form-table td .description{color:#666;font-style:italic;margin-top:4px}
+/* —— Net Cart Admin —— */
+.znc-admin-wrap{max-width:1100px;margin:20px auto;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+.znc-admin-wrap h1{display:flex;align-items:center;gap:10px;font-size:22px;color:#1e1e1e}
+.znc-admin-wrap h1 .dashicons{color:#7c3aed;font-size:28px}
+.znc-admin-wrap h2{font-size:17px;color:#23282d;border-bottom:2px solid #7c3aed;padding-bottom:8px;margin-top:28px}
+.znc-admin-wrap .form-table th{width:220px;padding:16px 10px 16px 0;vertical-align:top;font-weight:600;color:#1e1e1e}
+.znc-admin-wrap .form-table td{padding:12px 10px}
+.znc-admin-wrap .form-table input[type=text],
+.znc-admin-wrap .form-table input[type=number],
+.znc-admin-wrap .form-table input[type=url],
+.znc-admin-wrap .form-table select,
+.znc-admin-wrap .form-table textarea{border:1px solid #8c8f94;border-radius:6px;padding:8px 12px;font-size:14px;width:100%;max-width:400px}
+.znc-admin-wrap .form-table input:focus,
+.znc-admin-wrap .form-table select:focus,
+.znc-admin-wrap .form-table textarea:focus{border-color:#7c3aed;box-shadow:0 0 0 1px #7c3aed;outline:none}
+.znc-admin-wrap .description{color:#646970;font-size:13px;margin-top:4px}
+/* Tags & Badges */
+.znc-tag{display:inline-block;padding:2px 10px;border-radius:12px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.03em}
+.znc-tag-host{background:#ede9fe;color:#6d28d9}
+.znc-tag-woo{background:#dbeafe;color:#1d4ed8}
+.znc-tag-enrolled{background:#d1fae5;color:#065f46}
+/* Status indicators */
+.znc-status{display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:600;padding:3px 10px;border-radius:10px}
+.znc-status::before{content:"";display:inline-block;width:8px;height:8px;border-radius:50%}
+.znc-status-enrolled{background:#d1fae5;color:#065f46}.znc-status-enrolled::before{background:#10b981}
+.znc-status-host{background:#ede9fe;color:#6d28d9}.znc-status-host::before{background:#7c3aed}
+.znc-status-none{background:#f3f4f6;color:#6b7280}.znc-status-none::before{background:#9ca3af}
+.znc-inline-status{display:inline-flex;align-items:center;gap:5px;padding:4px 12px;border-radius:8px;font-size:13px;font-weight:600}
+.znc-inline-status.active{background:#d1fae5;color:#065f46}
+.znc-inline-status.inactive{background:#fee2e2;color:#991b1b}
+.znc-inline-status .dashicons{font-size:16px;width:16px;height:16px}
+/* Diagnostics */
+.znc-diag-section{background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:20px;margin-bottom:20px}
+.znc-diag-section h3{margin-top:0;color:#1e1e1e;font-size:15px}
+.znc-stat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:14px}
+.znc-stat-card{background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:14px;text-align:center}
+.znc-stat-value{font-size:28px;font-weight:800;color:#7c3aed}
+.znc-stat-label{font-size:12px;color:#6b7280;text-transform:uppercase;margin-top:4px}
+/* Points Bridge */
+.znc-bridge-grid{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:20px}
+@media(max-width:782px){.znc-bridge-grid{grid-template-columns:1fr}}
+.znc-bridge-panel{background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:20px}
+.znc-bridge-panel h3{margin-top:0;display:flex;align-items:center;gap:8px;font-size:15px}
+.znc-bridge-panel .dashicons{color:#7c3aed}
+.znc-point-type-list{list-style:none;padding:0;margin:10px 0}
+.znc-point-type-list li{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid #f3f4f6;font-size:13px}
+.znc-transfer-form{margin-top:16px;padding-top:16px;border-top:1px solid #e5e7eb}
+.znc-transfer-form label{display:block;font-weight:600;font-size:13px;margin-bottom:4px;color:#374151}
+.znc-transfer-form select,.znc-transfer-form input{width:100%;padding:8px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:14px;margin-bottom:12px}
+/* Spinner */
+.znc-spinner{display:inline-block;width:16px;height:16px;border:2px solid #e5e7eb;border-top-color:#7c3aed;border-radius:50%;animation:znc-spin .6s linear infinite;vertical-align:middle;margin-left:6px}
+@keyframes znc-spin{to{transform:rotate(360deg)}}
+.znc-test-result{font-size:12px;margin-left:8px}
+.znc-test-result.ok{color:#059669}.znc-test-result.fail{color:#dc2626}
