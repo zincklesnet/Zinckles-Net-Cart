@@ -1,59 +1,60 @@
 <?php
 defined( 'ABSPATH' ) || exit;
-
 class ZNC_Main_Admin {
-
-    public static function init() {
-        add_action( 'admin_menu', array( __CLASS__, 'add_menu' ) );
+    private $store;
+    public function __construct( ZNC_Global_Cart_Store $store ) { $this->store = $store; }
+    public function init() {
+        add_action( 'admin_menu', array( $this, 'add_menu' ) );
     }
-
-    public static function add_menu() {
-        add_menu_page( 'Net Cart', 'Net Cart', 'manage_options', 'znc-settings', array( __CLASS__, 'render_settings' ), 'dashicons-cart', 56 );
-        add_submenu_page( 'znc-settings', 'Settings',     'Settings',     'manage_options', 'znc-settings',      array( __CLASS__, 'render_settings' ) );
-        add_submenu_page( 'znc-settings', 'Cart Browser',  'Cart Browser', 'manage_options', 'znc-cart-browser',  array( __CLASS__, 'render_cart_browser' ) );
-        add_submenu_page( 'znc-settings', 'Order Map',     'Order Map',    'manage_options', 'znc-order-map',     array( __CLASS__, 'render_order_map' ) );
+    public function add_menu() {
+        add_menu_page( 'Net Cart', 'Net Cart', 'manage_woocommerce', 'znc-settings', array( $this, 'render' ), 'dashicons-cart', 56 );
+        add_submenu_page( 'znc-settings', 'Settings', 'Settings', 'manage_woocommerce', 'znc-settings', array( $this, 'render' ) );
+        add_submenu_page( 'znc-settings', 'Cart Browser', 'Cart Browser', 'manage_woocommerce', 'znc-cart-browser', array( $this, 'render_cart_browser' ) );
     }
-
-    public static function render_settings() {
-        echo '<div class="wrap"><h1>Zinckles Net Cart — Checkout Host Settings</h1>';
-        echo '<p>This site is the designated checkout host. Global cart, checkout, and My Account are served from here.</p>';
+    public function render() {
         $host = new ZNC_Checkout_Host();
-        echo '<table class="form-table"><tr><th>Cart Page</th><td>' . esc_url( $host->get_cart_url() ) . '</td></tr>';
-        echo '<tr><th>Checkout Page</th><td>' . esc_url( $host->get_checkout_url() ) . '</td></tr>';
-        echo '<tr><th>My Account</th><td>' . esc_url( $host->get_account_url() ) . '</td></tr></table>';
-        echo '</div>';
+        ?>
+        <div class="wrap">
+            <h1>Zinckles Net Cart — Checkout Host Settings</h1>
+            <div class="card" style="max-width:600px;padding:20px;">
+                <h2>This is the Checkout Host</h2>
+                <p>This site hosts the global cart, checkout, and My Account pages for the entire network.</p>
+                <table class="widefat">
+                    <tr><td>Site</td><td><strong><?php echo esc_html( get_bloginfo('name') ); ?></strong></td></tr>
+                    <tr><td>Enrolled Shops</td><td><?php echo count( $host->get_enrolled_shop_ids() ); ?></td></tr>
+                    <tr><td>Cart Page</td><td><?php echo get_option('znc_cart_page_id') ? '<span style="color:green;">Set (ID: ' . get_option('znc_cart_page_id') . ')</span>' : '<span style="color:red;">Not set — create a page with [znc_global_cart]</span>'; ?></td></tr>
+                    <tr><td>Checkout Page</td><td><?php echo get_option('znc_checkout_page_id') ? '<span style="color:green;">Set (ID: ' . get_option('znc_checkout_page_id') . ')</span>' : '<span style="color:red;">Not set — create a page with [znc_checkout]</span>'; ?></td></tr>
+                </table>
+            </div>
+        </div>
+        <?php
     }
-
-    public static function render_cart_browser() {
+    public function render_cart_browser() {
         global $wpdb;
         $table = $wpdb->prefix . 'znc_global_cart';
-        $carts = $wpdb->get_results( "SELECT user_id, COUNT(*) as items, SUM(quantity) as total_qty FROM {$table} WHERE expires_at > NOW() GROUP BY user_id ORDER BY total_qty DESC LIMIT 50" );
-
-        echo '<div class="wrap"><h1>Net Cart — Active Carts</h1>';
-        echo '<table class="widefat striped"><thead><tr><th>User</th><th>Items</th><th>Total Qty</th></tr></thead><tbody>';
-        foreach ( $carts as $cart ) {
-            $user = get_userdata( $cart->user_id );
-            echo '<tr><td>' . esc_html( $user ? $user->display_name : '#' . $cart->user_id ) . '</td>';
-            echo '<td>' . $cart->items . '</td><td>' . $cart->total_qty . '</td></tr>';
-        }
-        if ( empty( $carts ) ) echo '<tr><td colspan="3">No active carts.</td></tr>';
-        echo '</tbody></table></div>';
-    }
-
-    public static function render_order_map() {
-        global $wpdb;
-        $table = $wpdb->prefix . 'znc_order_map';
-        $maps  = $wpdb->get_results( "SELECT * FROM {$table} ORDER BY created_at DESC LIMIT 50" );
-
-        echo '<div class="wrap"><h1>Net Cart — Order Map</h1>';
-        echo '<table class="widefat striped"><thead><tr><th>Parent Order</th><th>Child Order</th><th>Child Site</th><th>Status</th><th>Created</th></tr></thead><tbody>';
-        foreach ( $maps as $m ) {
-            $site = get_blog_details( $m->child_blog_id );
-            echo '<tr><td>#' . $m->parent_order_id . '</td><td>#' . $m->child_order_id . '</td>';
-            echo '<td>' . esc_html( $site ? $site->blogname : 'Site ' . $m->child_blog_id ) . '</td>';
-            echo '<td>' . esc_html( $m->status ) . '</td><td>' . esc_html( $m->created_at ) . '</td></tr>';
-        }
-        if ( empty( $maps ) ) echo '<tr><td colspan="5">No orders yet.</td></tr>';
-        echo '</tbody></table></div>';
+        $carts = $wpdb->get_results( "SELECT user_id, COUNT(*) as items, COUNT(DISTINCT blog_id) as shops, SUM(price * quantity) as total FROM {$table} GROUP BY user_id ORDER BY total DESC LIMIT 50" );
+        ?>
+        <div class="wrap">
+            <h1>Net Cart — Cart Browser</h1>
+            <table class="wp-list-table widefat fixed striped">
+                <thead><tr><th>User</th><th>Items</th><th>Shops</th><th>Total</th></tr></thead>
+                <tbody>
+                <?php foreach ( $carts as $cart ) :
+                    $user = get_userdata( $cart->user_id );
+                ?>
+                    <tr>
+                        <td><?php echo $user ? esc_html( $user->display_name . ' (' . $user->user_email . ')' ) : 'User #' . $cart->user_id; ?></td>
+                        <td><?php echo $cart->items; ?></td>
+                        <td><?php echo $cart->shops; ?></td>
+                        <td><?php echo number_format( $cart->total, 2 ); ?></td>
+                    </tr>
+                <?php endforeach; ?>
+                <?php if ( empty( $carts ) ) : ?>
+                    <tr><td colspan="4">No active carts.</td></tr>
+                <?php endif; ?>
+                </tbody>
+            </table>
+        </div>
+        <?php
     }
 }

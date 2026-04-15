@@ -1,8 +1,35 @@
-/* Zinckles Net Cart — Admin Styles v1.3.1 */
-.znc-badge{display:inline-block;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:600;line-height:1.4}
-.znc-badge-success{background:#d4edda;color:#155724}
-.znc-badge-warning{background:#fff3cd;color:#856404}
-.znc-badge-neutral{background:#e2e3e5;color:#383d41}
-.znc-badge-host{background:#cce5ff;color:#004085;margin-left:6px}
-#znc-subsites-table .button{margin-right:4px}
-#znc-subsites-table tr{transition:background-color .3s ease}
+/* Zinckles Net Cart — Admin Styles v1.3.2 */
+.znc-wrap{max-width:960px}
+.znc-wrap h1{font-size:23px;font-weight:600;color:#1d2327;margin-bottom:8px}
+.znc-wrap .description{color:#646970;margin-bottom:20px}
+
+/* Badges */
+.znc-badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;line-height:1.6}
+.znc-badge-green,.znc-badge-success{background:#d1fae5;color:#065f46}
+.znc-badge-red{background:#fee2e2;color:#991b1b}
+.znc-badge-gray,.znc-badge-neutral{background:#f3f4f6;color:#6b7280}
+.znc-badge-purple{background:#ede9fe;color:#5b21b6}
+.znc-badge-yellow{background:#fef9c3;color:#854d0e}
+
+/* Sites table */
+.znc-sites-table{margin-top:12px}
+.znc-sites-table th{font-size:13px}
+.znc-sites-table td{vertical-align:middle}
+.znc-sites-table .button-small{margin-right:4px}
+
+/* Diagnostics grid */
+.znc-diag-card{background:#fff;border:1px solid #c3c4c7;border-radius:4px;padding:16px}
+.znc-diag-card h3{margin:0 0 12px;font-size:14px;text-transform:uppercase;letter-spacing:.04em;color:#1d2327}
+.znc-diag-card .widefat td{padding:8px 10px}
+
+/* Settings form */
+.znc-wrap .form-table th{width:200px;padding:15px 10px;font-weight:500}
+.znc-wrap .form-table td{padding:12px 10px}
+.znc-wrap .form-table select,
+.znc-wrap .form-table input[type="number"],
+.znc-wrap .form-table textarea{min-width:200px}
+
+/* MyCred types table */
+.znc-wrap .widefat thead th{font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:#646970}
+.znc-wrap .widefat td{vertical-align:middle}
+.znc-wrap .widefat code{background:#f0f0f1;padding:2px 6px;border-radius:3px;font-size:12px}

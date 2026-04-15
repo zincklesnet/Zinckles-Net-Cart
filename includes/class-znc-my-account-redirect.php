@@ -1,21 +1,22 @@
 <?php
 /**
- * My Account + Cart + Checkout Redirect.
+ * My Account + Cart + Checkout Redirect — v1.3.2
  *
- * On every enrolled subsite that is NOT the checkout host:
- *  - Redirects My Account / Cart / Checkout pages to the checkout host
- *  - Replaces WC menu links for those pages
- *  - Shows a banner on shop pages linking to the global cart
- *  - Rewrites "View cart" button after add-to-cart
+ * On enrolled subsites, redirects cart, checkout, and my-account pages
+ * to the designated checkout host. URL filter methods return pre-resolved
+ * cached values — zero switch_to_blog() calls.
  *
  * @package ZincklesNetCart
- * @since   1.3.0
  */
 defined( 'ABSPATH' ) || exit;
 
 class ZNC_My_Account_Redirect {
 
+    /** @var ZNC_Checkout_Host */
     private $host;
+
+    /** @var bool|null Cached enrollment status */
+    private $enrolled = null;
 
     public function __construct( ZNC_Checkout_Host $host ) {
         $this->host = $host;
@@ -33,10 +34,10 @@ class ZNC_My_Account_Redirect {
 
         add_filter( 'wp_nav_menu_objects', array( $this, 'filter_nav_menu_items' ), 20, 2 );
 
-        add_action( 'woocommerce_before_shop_loop',      array( $this, 'cart_notice' ) );
-        add_action( 'woocommerce_before_single_product', array( $this, 'cart_notice' ) );
+        add_action( 'woocommerce_before_shop_loop',       array( $this, 'cart_notice' ) );
+        add_action( 'woocommerce_before_single_product',  array( $this, 'cart_notice' ) );
+        add_filter( 'wc_add_to_cart_message_html',        array( $this, 'filter_add_to_cart_message' ), 20, 2 );
 
-        add_filter( 'wc_add_to_cart_message_html', array( $this, 'filter_add_to_cart_message' ), 20, 2 );
         add_action( 'wp_enqueue_scripts', array( $this, 'enqueue_assets' ) );
     }
 
@@ -46,12 +47,12 @@ class ZNC_My_Account_Redirect {
 
         $redirect_url = '';
 
-        if ( is_account_page() ) {
+        if ( function_exists( 'is_account_page' ) && is_account_page() ) {
             $redirect_url = $this->host->get_account_url();
             global $wp;
             if ( ! empty( $wp->query_vars ) ) {
-                foreach ( array( 'orders','view-order','edit-account','edit-address',
-                                 'payment-methods','downloads','net-cart-orders' ) as $ep ) {
+                foreach ( array( 'orders', 'view-order', 'edit-account', 'edit-address',
+                    'payment-methods', 'downloads', 'net-cart-orders' ) as $ep ) {
                     if ( isset( $wp->query_vars[ $ep ] ) ) {
                         $redirect_url = trailingslashit( $redirect_url ) . $ep . '/';
                         $val = $wp->query_vars[ $ep ];
@@ -60,9 +61,9 @@ class ZNC_My_Account_Redirect {
                     }
                 }
             }
-        } elseif ( is_cart() ) {
+        } elseif ( function_exists( 'is_cart' ) && is_cart() ) {
             $redirect_url = $this->host->get_cart_url();
-        } elseif ( is_checkout() && ! is_wc_endpoint_url( 'order-received' ) ) {
+        } elseif ( function_exists( 'is_checkout' ) && is_checkout() && ! is_wc_endpoint_url( 'order-received' ) ) {
             $redirect_url = $this->host->get_checkout_url();
         }
 
@@ -73,9 +74,19 @@ class ZNC_My_Account_Redirect {
         }
     }
 
-    public function filter_account_url( $url )  { return $this->host->get_account_url(); }
-    public function filter_cart_url( $url )      { return $this->host->get_cart_url(); }
-    public function filter_checkout_url( $url )  { return $this->host->get_checkout_url(); }
+    /* URL FILTERS — cached values, zero switch_to_blog */
+
+    public function filter_account_url( $url ) {
+        return $this->host->get_account_url();
+    }
+
+    public function filter_cart_url( $url ) {
+        return $this->host->get_cart_url();
+    }
+
+    public function filter_checkout_url( $url ) {
+        return $this->host->get_checkout_url();
+    }
 
     /** Rewrite nav menu items linking to local WC pages. */
     public function filter_nav_menu_items( $items, $args ) {
@@ -100,9 +111,11 @@ class ZNC_My_Account_Redirect {
         static $shown = false;
         if ( $shown ) return;
         $shown = true;
+
         $cart_url  = esc_url( $this->host->get_cart_url() );
         $host_info = $this->host->get_host_info();
         $host_name = esc_html( $host_info['name'] );
+
         echo '<div class="znc-cart-redirect-notice">';
         echo '<span class="znc-notice-icon">&#x1F6D2;</span> ';
         printf(
@@ -117,8 +130,8 @@ class ZNC_My_Account_Redirect {
         $cart_url = esc_url( $this->host->get_cart_url() );
         return preg_replace(
             '#<a[^>]*class="button wc-forward"[^>]*>[^<]*</a>#i',
-            '<a href="' . $cart_url . '" class="button wc-forward">' .
-                __( 'View Global Cart', 'zinckles-net-cart' ) . '</a>',
+            '<a href="' . $cart_url . '" class="button wc-forward">'
+                . __( 'View Global Cart', 'zinckles-net-cart' ) . '</a>',
             $message
         );
     }
@@ -129,8 +142,8 @@ class ZNC_My_Account_Redirect {
         if ( is_shop() || is_product() || is_product_category() || is_product_tag() ) {
             wp_add_inline_style( 'woocommerce-general', '
                 .znc-cart-redirect-notice{background:linear-gradient(135deg,#7c3aed15,#4f46e515);
-                border:1px solid #7c3aed40;border-radius:8px;padding:12px 16px;margin-bottom:20px;
-                font-size:14px;color:#1a1145;display:flex;align-items:center;gap:8px}
+                    border:1px solid #7c3aed40;border-radius:8px;padding:12px 16px;margin-bottom:20px;
+                    font-size:14px;color:#1a1145;display:flex;align-items:center;gap:8px}
                 .znc-cart-redirect-notice a{color:#7c3aed;text-decoration:none}
                 .znc-cart-redirect-notice a:hover{text-decoration:underline}
                 .znc-notice-icon{font-size:18px}
@@ -138,14 +151,10 @@ class ZNC_My_Account_Redirect {
         }
     }
 
+    /** Check enrollment — cached per request. */
     private function is_enrolled() {
-        $settings = get_site_option( 'znc_network_settings', array() );
-        $blog_id  = get_current_blog_id();
-        $blocked  = (array) ( $settings['blocked_sites'] ?? array() );
-        if ( in_array( $blog_id, $blocked, true ) ) return false;
-        $mode = $settings['enrollment_mode'] ?? 'opt-in';
-        if ( $mode === 'opt-out' ) return true;
-        $enrolled = (array) ( $settings['enrolled_sites'] ?? array() );
-        return in_array( $blog_id, $enrolled, true );
+        if ( null !== $this->enrolled ) return $this->enrolled;
+        $this->enrolled = $this->host->is_enrolled( get_current_blog_id() );
+        return $this->enrolled;
     }
 }

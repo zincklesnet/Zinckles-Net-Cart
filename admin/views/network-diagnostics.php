@@ -1,87 +1,52 @@
 <?php
-/**
- * Network Admin — Diagnostics Page
- * v1.2.0
- */
 defined( 'ABSPATH' ) || exit;
+$host     = new ZNC_Checkout_Host();
+$host_id  = $host->get_host_id();
+$enrolled = $host->get_enrolled_ids();
+$host_info = $host->get_host_info();
 
-$enrolled_count = count( $enrolled );
-$secret_set     = ! empty( $settings['rest_shared_secret'] );
+global $wpdb;
+$host_prefix = $wpdb->get_blog_prefix( $host_id );
+$table = $host_prefix . 'znc_global_cart';
+$table_exists = (bool) $wpdb->get_var( $wpdb->prepare(
+    "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = %s AND table_name = %s",
+    DB_NAME, $table
+) );
+$cart_count = $table_exists ? (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$table}" ) : 0;
+$cart_users = $table_exists ? (int) $wpdb->get_var( "SELECT COUNT(DISTINCT user_id) FROM {$table}" ) : 0;
 ?>
-<div class="wrap">
-    <h1><?php _e( 'Net Cart — Diagnostics', 'znc' ); ?></h1>
+<div class="wrap znc-wrap">
+    <h1><?php esc_html_e( 'Net Cart — Diagnostics', 'zinckles-net-cart' ); ?></h1>
 
-    <!-- Stats Grid -->
-    <div class="znc-diag-grid">
-        <div class="znc-diag-card">
-            <div class="znc-diag-value"><?php echo $enrolled_count; ?></div>
-            <div class="znc-diag-label"><?php _e( 'Enrolled Sites', 'znc' ); ?></div>
+    <div class="znc-diag-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:20px;">
+        <div class="znc-diag-card card">
+            <h3>System Info</h3>
+            <table class="widefat">
+                <tr><td>Plugin Version</td><td><strong><?php echo ZNC_VERSION; ?></strong></td></tr>
+                <tr><td>DB Version</td><td><?php echo get_site_option( 'znc_db_version', 'N/A' ); ?></td></tr>
+                <tr><td>WordPress</td><td><?php echo get_bloginfo( 'version' ); ?></td></tr>
+                <tr><td>PHP</td><td><?php echo phpversion(); ?></td></tr>
+                <tr><td>Memory Limit</td><td><?php echo ini_get( 'memory_limit' ); ?></td></tr>
+                <tr><td>Memory Usage</td><td><?php echo round( memory_get_usage( true ) / 1048576, 1 ); ?> MB</td></tr>
+                <tr><td>Peak Memory</td><td><?php echo round( memory_get_peak_usage( true ) / 1048576, 1 ); ?> MB</td></tr>
+            </table>
         </div>
-        <div class="znc-diag-card">
-            <div class="znc-diag-value"><?php echo $secret_set ? '✅' : '❌'; ?></div>
-            <div class="znc-diag-label"><?php _e( 'REST Secret', 'znc' ); ?></div>
-        </div>
-        <div class="znc-diag-card">
-            <div class="znc-diag-value"><?php echo esc_html( $settings['enrollment_mode'] ); ?></div>
-            <div class="znc-diag-label"><?php _e( 'Enrollment Mode', 'znc' ); ?></div>
-        </div>
-        <div class="znc-diag-card">
-            <div class="znc-diag-value"><?php echo esc_html( $settings['base_currency'] ); ?></div>
-            <div class="znc-diag-label"><?php _e( 'Base Currency', 'znc' ); ?></div>
+        <div class="znc-diag-card card">
+            <h3>Network Status</h3>
+            <table class="widefat">
+                <tr><td>Checkout Host</td><td><strong><?php echo esc_html( $host_info['name'] ); ?></strong> (ID: <?php echo $host_id; ?>)</td></tr>
+                <tr><td>Enrolled Sites</td><td><?php echo count( $enrolled ); ?></td></tr>
+                <tr><td>Cart Table</td><td><?php echo $table_exists ? '<span class="znc-badge znc-badge-green">Exists</span>' : '<span class="znc-badge znc-badge-red">Missing</span>'; ?></td></tr>
+                <tr><td>Active Carts</td><td><?php echo $cart_users; ?> users</td></tr>
+                <tr><td>Total Cart Items</td><td><?php echo $cart_count; ?></td></tr>
+                <tr><td>REST Secret</td><td><?php echo get_site_option( 'znc_rest_secret' ) ? '<span class="znc-badge znc-badge-green">Set</span>' : '<span class="znc-badge znc-badge-red">Missing</span>'; ?></td></tr>
+            </table>
         </div>
     </div>
 
-    <?php if ( $enrolled_count > 0 ) : ?>
-    <div class="card" style="max-width:780px;margin-bottom:24px;">
-        <h2>
-            <?php _e( 'Connection Tests', 'znc' ); ?>
-            <button type="button" class="button button-small" id="znc-test-all" style="margin-left:12px;">
-                <?php _e( 'Test All Connections', 'znc' ); ?>
-            </button>
-        </h2>
-        <table class="wp-list-table widefat striped">
-            <thead>
-                <tr>
-                    <th><?php _e( 'Site', 'znc' ); ?></th>
-                    <th><?php _e( 'WooCommerce', 'znc' ); ?></th>
-                    <th><?php _e( 'MyCred', 'znc' ); ?></th>
-                    <th><?php _e( 'Products', 'znc' ); ?></th>
-                    <th><?php _e( 'Status', 'znc' ); ?></th>
-                </tr>
-            </thead>
-            <tbody>
-                <?php foreach ( $enrolled as $site ) : ?>
-                <tr>
-                    <td><strong><?php echo esc_html( $site['name'] ); ?></strong></td>
-                    <td><?php echo $site['wc_active'] ? '✅' : '❌'; ?></td>
-                    <td><?php echo $site['mycred'] ? '✅' : '—'; ?></td>
-                    <td><?php echo (int) $site['products']; ?></td>
-                    <td>
-                        <button type="button" class="button button-small znc-test-connection"
-                                data-blog-id="<?php echo $site['blog_id']; ?>">
-                            <?php _e( 'Test', 'znc' ); ?>
-                        </button>
-                        <span class="znc-connection-result"></span>
-                    </td>
-                </tr>
-                <?php endforeach; ?>
-            </tbody>
-        </table>
-    </div>
-    <?php else : ?>
-        <div class="notice notice-warning">
-            <p><?php _e( 'No subsites are enrolled yet. Go to Subsites to enroll shops.', 'znc' ); ?></p>
+    <?php if ( ! $table_exists ) : ?>
+        <div class="notice notice-error" style="margin-top:20px;">
+            <p><strong>Global cart table is missing.</strong> Try deactivating and reactivating Zinckles Net Cart from Network Admin → Plugins.</p>
         </div>
     <?php endif; ?>
-
-    <div class="card" style="max-width:780px;">
-        <h2><?php _e( 'System Info', 'znc' ); ?></h2>
-        <table class="form-table">
-            <tr><th><?php _e( 'Plugin Version', 'znc' ); ?></th><td><code><?php echo ZNC_VERSION; ?></code></td></tr>
-            <tr><th><?php _e( 'DB Version', 'znc' ); ?></th><td><code><?php echo get_site_option( 'znc_db_version', '—' ); ?></code></td></tr>
-            <tr><th><?php _e( 'PHP Version', 'znc' ); ?></th><td><code><?php echo PHP_VERSION; ?></code></td></tr>
-            <tr><th><?php _e( 'WordPress', 'znc' ); ?></th><td><code><?php echo get_bloginfo( 'version' ); ?></code></td></tr>
-            <tr><th><?php _e( 'Multisite', 'znc' ); ?></th><td><?php echo is_multisite() ? '✅ Yes' : '❌ No'; ?></td></tr>
-        </table>
-    </div>
 </div>

@@ -1,224 +1,127 @@
 <?php
 /**
- * MyCred Engine — multi-point-type support.
- *
- * v1.2.0: Detects ALL registered MyCred point types, not just 'zcreds'.
- * Each type has its own exchange rate, max %, and enabled state.
- *
- * @package ZincklesNetCart
- * @since   1.0.0
+ * MyCred Engine — v1.3.2
+ * Detects ALL MyCred point types across the network via mycred_get_types()
+ * and direct DB scan. Per-type exchange rate, max %, and enable/disable.
  */
-
 defined( 'ABSPATH' ) || exit;
 
 class ZNC_MyCred_Engine {
 
-    public function init() {
-        add_filter( 'znc_mycred_config', array( $this, 'get_config' ) );
-    }
+    private static $types = null;
 
-    /**
-     * Check if MyCred is available at all.
-     */
-    public function is_available() {
-        return function_exists( 'mycred' ) && function_exists( 'mycred_get_types' );
-    }
+    public function init() { /* lazy-load everything */ }
 
-    /**
-     * Get all enabled point types with their settings.
-     */
-    public function get_enabled_types() {
-        if ( ! $this->is_available() ) {
-            return array();
+    public static function get_all_point_types() {
+        if ( null !== self::$types ) return self::$types;
+
+        $cached = get_site_transient( 'znc_mycred_point_types' );
+        if ( is_array( $cached ) && ! empty( $cached ) ) {
+            self::$types = $cached;
+            return self::$types;
         }
 
-        $settings = get_site_option( 'znc_network_settings', array() );
+        self::$types = array();
 
-        if ( empty( $settings['mycred_enabled'] ) ) {
-            return array();
-        }
-
-        $configured_types = (array) ( $settings['mycred_point_types'] ?? array() );
-
-        if ( empty( $configured_types ) ) {
-            // Fallback: use registered MyCred types with default settings.
-            $registered = mycred_get_types();
-            foreach ( $registered as $slug => $label ) {
-                $configured_types[ $slug ] = array(
-                    'slug'          => $slug,
-                    'label'         => $label,
-                    'exchange_rate' => (float) ( $settings['mycred_exchange_rate'] ?? 1.0 ),
-                    'max_percent'   => (int) ( $settings['mycred_max_percent'] ?? 50 ),
-                    'enabled'       => true,
+        // Check host site MyCred
+        if ( function_exists( 'mycred_get_types' ) ) {
+            $types = mycred_get_types();
+            foreach ( $types as $slug => $label ) {
+                $mycred = mycred( $slug );
+                self::$types[ $slug ] = array(
+                    'slug'     => $slug,
+                    'label'    => $label,
+                    'singular' => $mycred ? $mycred->singular() : $label,
+                    'plural'   => $mycred ? $mycred->plural() : $label,
                 );
             }
         }
 
-        // Filter to only enabled types.
-        return array_filter( $configured_types, function ( $type ) {
-            return ! empty( $type['enabled'] );
-        } );
-    }
+        // Scan enrolled subsites for additional types via direct DB
+        $host = new ZNC_Checkout_Host();
+        $enrolled = $host->get_enrolled_ids();
+        $host_id  = $host->get_host_id();
 
-    /**
-     * Get a user's balance for a specific point type.
-     */
-    public function get_balance( $user_id, $point_type = 'mycred_default' ) {
-        if ( ! $this->is_available() ) {
-            return 0;
+        foreach ( $enrolled as $blog_id ) {
+            if ( (int) $blog_id === (int) $host_id ) continue;
+            global $wpdb;
+            $prefix = $wpdb->get_blog_prefix( $blog_id );
+            $raw    = $wpdb->get_var(
+                "SELECT option_value FROM {$prefix}options WHERE option_name = 'mycred_types' LIMIT 1"
+            );
+            if ( $raw ) {
+                $subsite_types = maybe_unserialize( $raw );
+                if ( is_array( $subsite_types ) ) {
+                    foreach ( $subsite_types as $slug => $label ) {
+                        if ( ! isset( self::$types[ $slug ] ) ) {
+                            self::$types[ $slug ] = array(
+                                'slug'     => $slug,
+                                'label'    => $label,
+                                'singular' => $label,
+                                'plural'   => $label,
+                                'source'   => 'subsite_' . $blog_id,
+                            );
+                        }
+                    }
+                }
+            }
         }
 
-        $mycred = mycred( $point_type );
-        if ( ! $mycred ) {
-            return 0;
-        }
-
-        return (float) $mycred->get_users_balance( $user_id );
-    }
-
-    /**
-     * Get balances for ALL enabled point types for a user.
-     */
-    public function get_all_balances( $user_id ) {
-        $types    = $this->get_enabled_types();
-        $balances = array();
-
-        foreach ( $types as $slug => $type ) {
-            $balances[ $slug ] = array(
-                'slug'          => $slug,
-                'label'         => $type['label'] ?? $slug,
-                'balance'       => $this->get_balance( $user_id, $slug ),
-                'exchange_rate' => (float) ( $type['exchange_rate'] ?? 1.0 ),
-                'max_percent'   => (int) ( $type['max_percent'] ?? 50 ),
+        if ( empty( self::$types ) ) {
+            self::$types['mycred_default'] = array(
+                'slug' => 'mycred_default', 'label' => 'ZCreds',
+                'singular' => 'ZCred', 'plural' => 'ZCreds',
             );
         }
 
-        return $balances;
+        set_site_transient( 'znc_mycred_point_types', self::$types, 3600 );
+        return self::$types;
     }
 
-    /**
-     * Calculate parallel totals for all point types against an order total.
-     */
-    public function get_parallel_totals( $user_id, $order_total, $base_currency = 'CAD' ) {
-        $balances = $this->get_all_balances( $user_id );
-        $totals   = array();
+    public static function get_types_config() {
+        $settings = get_site_option( 'znc_network_settings', array() );
+        $config   = isset( $settings['mycred_types_config'] ) ? (array) $settings['mycred_types_config'] : array();
+        $types    = self::get_all_point_types();
 
-        foreach ( $balances as $slug => $data ) {
-            $exchange_rate     = $data['exchange_rate'];
-            $max_percent       = $data['max_percent'];
-            $balance           = $data['balance'];
-            $max_applicable    = $order_total * ( $max_percent / 100 );
-            $balance_in_currency = $balance * $exchange_rate;
-            $applicable        = min( $max_applicable, $balance_in_currency );
-            $points_to_deduct  = $exchange_rate > 0 ? $applicable / $exchange_rate : 0;
-
-            $totals[ $slug ] = array(
-                'slug'              => $slug,
-                'label'             => $data['label'],
-                'balance'           => $balance,
-                'exchange_rate'     => $exchange_rate,
-                'max_percent'       => $max_percent,
-                'max_applicable'    => round( $max_applicable, 2 ),
-                'balance_value'     => round( $balance_in_currency, 2 ),
-                'applicable_value'  => round( $applicable, 2 ),
-                'points_to_deduct'  => floor( $points_to_deduct ),
-                'remaining_monetary' => round( $order_total - $applicable, 2 ),
-            );
+        foreach ( $types as $slug => $info ) {
+            if ( ! isset( $config[ $slug ] ) ) {
+                $config[ $slug ] = array( 'enabled' => 0, 'exchange_rate' => 0, 'max_percent' => 100 );
+            }
+            $config[ $slug ]['info'] = $info;
         }
-
-        return $totals;
+        return $config;
     }
 
-    /**
-     * Validate that a user has enough points for a deduction.
-     */
-    public function validate_deduction( $user_id, $point_type, $amount ) {
-        $balance = $this->get_balance( $user_id, $point_type );
-        return $balance >= $amount;
+    public static function get_balance( $user_id, $type_slug = 'mycred_default' ) {
+        if ( ! function_exists( 'mycred_get_users_balance' ) ) return 0;
+        return (float) mycred_get_users_balance( $user_id, $type_slug );
     }
 
-    /**
-     * Deduct points from a user.
-     */
-    public function deduct( $user_id, $point_type, $amount, $reference = 'znc_checkout', $data = array() ) {
-        if ( ! $this->is_available() ) {
-            return new WP_Error( 'mycred_unavailable', 'MyCred is not available.' );
-        }
-
-        $mycred = mycred( $point_type );
-        if ( ! $mycred ) {
-            return new WP_Error( 'invalid_type', 'Invalid point type: ' . $point_type );
-        }
-
-        if ( ! $this->validate_deduction( $user_id, $point_type, $amount ) ) {
-            return new WP_Error( 'insufficient_balance', sprintf(
-                'Insufficient %s balance. Required: %s, Available: %s',
-                $point_type, $amount, $this->get_balance( $user_id, $point_type )
-            ) );
-        }
-
-        $entry = sprintf(
-            'Net Cart checkout — Order #%s',
-            $data['order_id'] ?? 'unknown'
-        );
-
-        $mycred->add_creds(
-            $reference,
-            $user_id,
-            0 - abs( $amount ),
-            $entry,
-            $data['order_id'] ?? 0,
-            $data
-        );
-
-        return array(
-            'deducted'    => $amount,
-            'point_type'  => $point_type,
-            'new_balance' => $this->get_balance( $user_id, $point_type ),
-        );
+    public static function deduct( $user_id, $amount, $type_slug = 'mycred_default', $ref = 'znc_checkout', $entry = '' ) {
+        if ( ! function_exists( 'mycred' ) ) return false;
+        $mycred = mycred( $type_slug );
+        if ( ! $mycred ) return false;
+        $mycred->update_users_balance( $user_id, -abs( $amount ), $type_slug );
+        $mycred->add_to_log( $ref, $user_id, -abs( $amount ), $entry ?: 'Net Cart checkout deduction', '', '', $type_slug );
+        return true;
     }
 
-    /**
-     * Refund points to a user (compensating action on checkout failure).
-     */
-    public function refund( $user_id, $point_type, $amount, $data = array() ) {
-        if ( ! $this->is_available() ) {
-            return new WP_Error( 'mycred_unavailable', 'MyCred is not available.' );
-        }
-
-        $mycred = mycred( $point_type );
-        if ( ! $mycred ) {
-            return new WP_Error( 'invalid_type', 'Invalid point type: ' . $point_type );
-        }
-
-        $entry = sprintf(
-            'Net Cart refund — Order #%s',
-            $data['order_id'] ?? 'unknown'
-        );
-
-        $mycred->add_creds(
-            'znc_refund',
-            $user_id,
-            abs( $amount ),
-            $entry,
-            $data['order_id'] ?? 0,
-            $data
-        );
-
-        return array(
-            'refunded'    => $amount,
-            'point_type'  => $point_type,
-            'new_balance' => $this->get_balance( $user_id, $point_type ),
-        );
+    public static function refund( $user_id, $amount, $type_slug = 'mycred_default', $ref = 'znc_refund', $entry = '' ) {
+        if ( ! function_exists( 'mycred' ) ) return false;
+        $mycred = mycred( $type_slug );
+        if ( ! $mycred ) return false;
+        $mycred->update_users_balance( $user_id, abs( $amount ), $type_slug );
+        $mycred->add_to_log( $ref, $user_id, abs( $amount ), $entry ?: 'Net Cart refund', '', '', $type_slug );
+        return true;
     }
 
-    /**
-     * Get config for filters.
-     */
-    public function get_config() {
-        return array(
-            'available'    => $this->is_available(),
-            'enabled_types' => $this->get_enabled_types(),
-        );
+    public static function validate_deduction( $user_id, $amount, $type_slug = 'mycred_default' ) {
+        return self::get_balance( $user_id, $type_slug ) >= abs( $amount );
+    }
+
+    public static function points_to_currency( $points, $type_slug = 'mycred_default' ) {
+        $config = self::get_types_config();
+        $rate   = isset( $config[ $type_slug ]['exchange_rate'] ) ? (float) $config[ $type_slug ]['exchange_rate'] : 0;
+        return $points * $rate;
     }
 }

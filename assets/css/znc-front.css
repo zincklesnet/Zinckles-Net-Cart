@@ -1,97 +1,75 @@
-/* ============================================
-   Zinckles Net Cart — Front-End Styles
-   ============================================ */
+/* Zinckles Net Cart — Front-end Styles v1.3.2 */
+.znc-cart{max-width:900px;margin:0 auto;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+.znc-cart-header{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:24px}
+.znc-cart-header h2{margin:0;font-size:24px}
+.znc-item-count{color:#666;font-size:14px}
+.znc-badge{display:inline-block;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.04em}
+.znc-badge-mixed{background:#fef3c7;color:#92400e;border:1px solid #fcd34d}
+.znc-badge-green,.znc-badge-success{background:#d1fae5;color:#065f46}
+.znc-badge-red{background:#fee2e2;color:#991b1b}
+.znc-badge-gray,.znc-badge-neutral{background:#f3f4f6;color:#374151}
+.znc-badge-purple{background:#ede9fe;color:#5b21b6}
+.znc-badge-yellow{background:#fef9c3;color:#854d0e}
 
-/* Cart Container */
-.znc-global-cart { max-width: 960px; margin: 0 auto; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+/* Shop sections */
+.znc-cart-shop{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:20px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+.znc-shop-header{display:flex;align-items:center;gap:10px;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid #f3f4f6}
+.znc-shop-badge{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:14px;flex-shrink:0}
+.znc-currency-tag{background:#f3f4f6;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:600;color:#6b7280}
 
-/* Empty Cart */
-.znc-empty-cart { text-align: center; padding: 60px 20px; }
-.znc-empty-icon { font-size: 64px; margin-bottom: 16px; }
-.znc-empty-cart p { font-size: 16px; color: #6b7280; }
+/* Cart items table */
+.znc-cart-items{width:100%;border-collapse:collapse}
+.znc-cart-items th{text-align:left;padding:8px 12px;font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:#9ca3af;border-bottom:1px solid #f3f4f6}
+.znc-cart-items td{padding:10px 12px;border-bottom:1px solid #f9fafb;vertical-align:middle}
+.znc-product-cell{display:flex;align-items:center;gap:10px}
+.znc-thumb{width:48px;height:48px;border-radius:8px;object-fit:cover;border:1px solid #e5e7eb}
+.znc-product-name{font-weight:500}
+.znc-qty{width:60px;padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;text-align:center;font-size:14px}
+.znc-line-total{font-weight:600}
+.znc-remove-item{background:none;border:none;color:#ef4444;cursor:pointer;font-size:16px;padding:4px 8px;border-radius:4px;transition:background .15s}
+.znc-remove-item:hover{background:#fee2e2}
+.znc-shop-total{text-align:right;padding-top:12px;font-size:15px}
 
-/* Cart Header */
-.znc-cart-header h2 { font-size: 22px; font-weight: 700; margin-bottom: 24px; color: #111827; }
+/* Cart summary */
+.znc-cart-summary{background:#f9fafb;border:1px solid #e5e7eb;border-radius:12px;padding:24px;margin-top:20px}
+.znc-currency-breakdown{margin-bottom:16px}
+.znc-currency-breakdown h3{font-size:14px;text-transform:uppercase;letter-spacing:.04em;color:#6b7280;margin-bottom:8px}
+.znc-cur-line,.znc-balance-line{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #e5e7eb}
+.znc-zcred-balances{margin-bottom:16px}
+.znc-zcred-balances h3{font-size:14px;color:#7c3aed;margin-bottom:8px}
+.znc-grand-total{display:flex;justify-content:space-between;padding:16px 0 20px;font-size:18px;border-top:2px solid #e5e7eb;margin-top:8px}
+.znc-checkout-btn{display:block;width:100%;padding:14px;background:linear-gradient(135deg,#7c3aed,#4f46e5);color:#fff;border:none;border-radius:10px;font-size:16px;font-weight:700;text-align:center;text-decoration:none;cursor:pointer;transition:opacity .15s}
+.znc-checkout-btn:hover{opacity:.9;color:#fff}
 
-/* Tabs */
-.znc-tabs { display: flex; gap: 8px; margin-bottom: 24px; flex-wrap: wrap; }
-.znc-tab { background: #f3f4f6; border: 1px solid #e5e7eb; border-radius: 8px; padding: 8px 16px; cursor: pointer; font-size: 14px; display: flex; align-items: center; gap: 8px; transition: all 0.2s; }
-.znc-tab:hover, .znc-tab.active { background: #fff; border-color: #4f46e5; box-shadow: 0 1px 3px rgba(79,70,229,0.15); }
-.znc-badge-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
-.znc-tab-count { color: #9ca3af; font-size: 12px; }
+/* Empty cart */
+.znc-cart-empty{text-align:center;padding:60px 20px}
+.znc-empty-icon{font-size:48px;margin-bottom:16px}
+.znc-cart-empty h2{margin-bottom:8px}
+.znc-cart-empty p{color:#6b7280}
+.znc-shop-links{margin-top:24px}
+.znc-shop-links h3{font-size:14px;margin-bottom:8px}
+.znc-shop-links ul{list-style:none;padding:0;display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+.znc-shop-links a{display:inline-block;padding:8px 16px;background:#7c3aed;color:#fff;border-radius:8px;text-decoration:none;font-weight:500;transition:opacity .15s}
+.znc-shop-links a:hover{opacity:.9}
 
-/* Shop Group */
-.znc-shop-group { margin-bottom: 32px; background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden; }
-.znc-shop-header { display: flex; align-items: center; gap: 12px; padding: 16px 20px; background: #f9fafb; border-bottom: 1px solid #e5e7eb; }
-.znc-shop-icon { width: 28px; height: 28px; border-radius: 6px; object-fit: cover; }
-.znc-shop-badge { color: #fff; padding: 4px 14px; border-radius: 20px; font-size: 13px; font-weight: 600; }
-.znc-shop-link { font-size: 13px; color: #4f46e5; text-decoration: none; margin-left: auto; }
-.znc-shop-link:hover { text-decoration: underline; }
+/* Login required */
+.znc-login-required{text-align:center;padding:40px}
+.znc-login-required a{color:#7c3aed}
 
-/* Cart Table */
-.znc-cart-table { width: 100%; border-collapse: collapse; }
-.znc-cart-table th { text-align: left; padding: 10px 16px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: #6b7280; border-bottom: 1px solid #f3f4f6; }
-.znc-cart-item td { padding: 14px 16px; border-bottom: 1px solid #f9fafb; vertical-align: middle; }
-.znc-cart-item:last-child td { border-bottom: none; }
+/* Checkout */
+.znc-checkout{max-width:900px;margin:0 auto}
+.znc-checkout h2{margin-bottom:12px}
+.znc-wc-checkout-wrapper{margin-top:20px}
 
-/* Item cells */
-.znc-item-image img { width: 48px; height: 48px; border-radius: 8px; object-fit: cover; }
-.znc-placeholder-img { width: 48px; height: 48px; background: #f3f4f6; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 24px; }
-.znc-item-name { font-weight: 500; color: #111827; font-size: 14px; }
-.znc-inline-badge { color: #fff; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; margin-left: 8px; vertical-align: middle; }
-.znc-item-price { font-size: 14px; color: #374151; }
-.znc-converted { color: #9ca3af; font-size: 12px; }
-.znc-qty-input { width: 56px; padding: 4px 8px; border: 1px solid #d1d5db; border-radius: 6px; text-align: center; font-size: 14px; }
-.znc-item-total { font-weight: 600; color: #111827; font-size: 14px; }
-.znc-remove-btn { background: none; border: none; color: #ef4444; font-size: 20px; cursor: pointer; padding: 4px 8px; border-radius: 4px; transition: background 0.15s; }
-.znc-remove-btn:hover { background: #fef2f2; }
-
-/* Totals */
-.znc-cart-totals { margin-top: 24px; background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 24px; }
-.znc-currency-breakdown { margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid #f3f4f6; }
-.znc-currency-breakdown h4 { margin: 0 0 8px; font-size: 14px; color: #374151; }
-.znc-breakdown-line { display: flex; justify-content: space-between; padding: 4px 0; font-size: 14px; }
-.znc-total-line { display: flex; justify-content: space-between; padding: 8px 0; font-size: 16px; }
-.znc-total-grand { font-weight: 700; font-size: 20px; border-top: 2px solid #111827; padding-top: 16px; margin-top: 8px; }
-
-/* ZCred Widget */
-.znc-zcred-widget { margin-top: 16px; padding: 16px; background: #faf5ff; border: 1px solid #e9d5ff; border-radius: 8px; }
-.znc-zcred-widget h4 { margin: 0 0 4px; font-size: 14px; color: #7c3aed; }
-.znc-zcred-widget p { margin: 0; font-size: 13px; color: #6b7280; }
-
-/* Checkout Button */
-.znc-checkout-btn { display: block; width: 100%; margin-top: 20px; padding: 14px; background: #4f46e5 !important; color: #fff !important; font-size: 16px; font-weight: 600; border: none; border-radius: 8px; cursor: pointer; text-align: center; text-decoration: none; transition: background 0.2s; }
-.znc-checkout-btn:hover { background: #4338ca !important; }
-
-/* Checkout Page */
-.znc-checkout { max-width: 720px; margin: 0 auto; }
-.znc-progress-bar { display: flex; justify-content: center; gap: 40px; margin-bottom: 32px; }
-.znc-step { display: flex; align-items: center; gap: 8px; font-size: 14px; color: #9ca3af; }
-.znc-step span { width: 28px; height: 28px; border-radius: 50%; background: #e5e7eb; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; }
-.znc-step.active { color: #4f46e5; }
-.znc-step.active span { background: #4f46e5; color: #fff; }
-.znc-step.completed span { background: #10b981; color: #fff; }
-.znc-checkout-section { margin-bottom: 24px; }
-.znc-checkout-section h3 { font-size: 18px; margin-bottom: 16px; }
-.znc-review-table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
-.znc-review-table th, .znc-review-table td { padding: 10px 12px; border-bottom: 1px solid #f3f4f6; text-align: left; font-size: 14px; }
-.znc-total-row td { font-weight: 700; border-top: 2px solid #111827; }
-.znc-zcred-checkout { margin-top: 16px; padding: 16px; background: #faf5ff; border: 1px solid #e9d5ff; border-radius: 8px; }
-.znc-zcred-checkout h4 { margin: 0 0 8px; color: #7c3aed; }
-.znc-billing-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-.znc-billing-fields label { font-size: 14px; color: #374151; }
-.znc-billing-fields input { width: 100%; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px; }
-.znc-checkout-nav { display: flex; justify-content: space-between; margin-top: 24px; }
-.znc-place-order-btn { width: 100%; padding: 14px; background: #4f46e5; color: #fff; font-size: 16px; font-weight: 600; border: none; border-radius: 8px; cursor: pointer; }
-.znc-place-order-btn:hover { background: #4338ca; }
-
-/* Notices */
-.znc-notice { padding: 12px 16px; background: #fef3c7; border: 1px solid #f59e0b; border-radius: 8px; color: #92400e; font-size: 14px; }
+/* Redirect notice */
+.znc-cart-redirect-notice{background:linear-gradient(135deg,rgba(124,58,237,.08),rgba(79,70,229,.08));border:1px solid rgba(124,58,237,.25);border-radius:8px;padding:12px 16px;margin-bottom:20px;font-size:14px;color:#1a1145;display:flex;align-items:center;gap:8px}
+.znc-cart-redirect-notice a{color:#7c3aed;text-decoration:none}
+.znc-cart-redirect-notice a:hover{text-decoration:underline}
 
 /* Responsive */
-@media (max-width: 640px) {
-    .znc-billing-fields { grid-template-columns: 1fr; }
-    .znc-tabs { flex-direction: column; }
-    .znc-progress-bar { gap: 16px; font-size: 12px; }
-    .znc-cart-table th:first-child, .znc-cart-item td:first-child { display: none; }
+@media(max-width:600px){
+    .znc-cart-header{flex-direction:column;align-items:flex-start}
+    .znc-product-cell{flex-direction:column;align-items:flex-start;gap:4px}
+    .znc-thumb{width:40px;height:40px}
+    .znc-stats{grid-template-columns:1fr 1fr}
 }

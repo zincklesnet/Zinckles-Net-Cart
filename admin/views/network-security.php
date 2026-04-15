@@ -1,110 +1,60 @@
 <?php
 /**
- * Network Admin — Security Settings
- *
- * v1.2.0 FIX: Added full form with Save button + regenerate secret button.
+ * Network Security View — v1.3.2
+ * FIXED: Has a proper <form> with Save button.
  */
 defined( 'ABSPATH' ) || exit;
 
-$secret = $settings['rest_shared_secret'] ?? '';
-$secret_preview = $secret
-    ? substr( $secret, 0, 8 ) . '…' . substr( $secret, -8 )
-    : __( 'Not generated', 'znc' );
+$settings = get_site_option( 'znc_network_settings', array() );
+$secret   = get_site_option( 'znc_rest_secret', '' );
 ?>
-<div class="wrap">
-    <h1><?php _e( 'Net Cart — Security', 'znc' ); ?></h1>
+<div class="wrap znc-wrap">
+    <h1><?php esc_html_e( 'Net Cart — Security', 'zinckles-net-cart' ); ?></h1>
 
-    <?php if ( isset( $_GET['updated'] ) ) : ?>
-        <div class="notice notice-success is-dismissible">
-            <p><?php _e( 'Security settings saved.', 'znc' ); ?></p>
-        </div>
-    <?php endif; ?>
-
-    <!-- ── HMAC Secret ────────────────────────────────────── -->
-    <div class="card" style="max-width:720px;margin-bottom:24px;">
-        <h2><?php _e( 'HMAC-SHA256 Shared Secret', 'znc' ); ?></h2>
-        <p class="description">
-            <?php _e( 'This secret is used to sign all cross-site REST requests between the main site and enrolled subsites.', 'znc' ); ?>
-        </p>
-
+    <form id="znc-security-form">
+        <h2><?php esc_html_e( 'HMAC Shared Secret', 'zinckles-net-cart' ); ?></h2>
         <table class="form-table">
             <tr>
-                <th><?php _e( 'Current Secret', 'znc' ); ?></th>
+                <th><?php esc_html_e( 'Current Secret', 'zinckles-net-cart' ); ?></th>
                 <td>
-                    <code id="znc-secret-preview"><?php echo esc_html( $secret_preview ); ?></code>
-                    <?php if ( $secret ) : ?>
-                        <span class="dashicons dashicons-yes-alt" style="color:#4caf50;vertical-align:middle;" title="Active"></span>
-                    <?php else : ?>
-                        <span class="dashicons dashicons-warning" style="color:#f44336;vertical-align:middle;" title="Not set"></span>
-                    <?php endif; ?>
-                </td>
-            </tr>
-            <tr>
-                <th></th>
-                <td>
-                    <button type="button" class="button button-secondary" id="znc-regenerate-secret">
-                        <?php _e( 'Regenerate & Propagate', 'znc' ); ?>
-                    </button>
-                    <p class="description">
-                        <?php _e( 'Generates a new 64-character secret and pushes it to all enrolled subsites automatically.', 'znc' ); ?>
-                    </p>
-                    <div id="znc-secret-status" style="margin-top:8px;"></div>
+                    <code style="word-break:break-all;"><?php echo $secret ? substr( $secret, 0, 12 ) . str_repeat( '•', 40 ) . substr( $secret, -8 ) : 'Not set'; ?></code>
+                    <p class="description"><?php esc_html_e( 'Used to sign cross-site REST requests between enrolled subsites and the checkout host.', 'zinckles-net-cart' ); ?></p>
                 </td>
             </tr>
         </table>
-    </div>
+        <p>
+            <button type="button" id="znc-regenerate-secret" class="button button-secondary"><?php esc_html_e( 'Regenerate & Propagate Secret', 'zinckles-net-cart' ); ?></button>
+            <span id="znc-secret-status" style="margin-left:12px;"></span>
+        </p>
 
-    <!-- ── Security Settings Form ─────────────────────────── -->
-    <form method="post" action="<?php echo esc_url( network_admin_url( 'edit.php?action=znc_save_security' ) ); ?>">
-        <?php wp_nonce_field( 'znc_save_security_settings' ); ?>
+        <h2><?php esc_html_e( 'Request Validation', 'zinckles-net-cart' ); ?></h2>
+        <table class="form-table">
+            <tr>
+                <th><?php esc_html_e( 'Clock Skew Tolerance (seconds)', 'zinckles-net-cart' ); ?></th>
+                <td>
+                    <input type="number" name="clock_skew" value="<?php echo esc_attr( $settings['clock_skew'] ?? 300 ); ?>" min="30" max="600" />
+                    <p class="description"><?php esc_html_e( 'Maximum allowed time difference between request timestamp and server time. Default: 300 seconds.', 'zinckles-net-cart' ); ?></p>
+                </td>
+            </tr>
+            <tr>
+                <th><?php esc_html_e( 'Rate Limit (requests/minute)', 'zinckles-net-cart' ); ?></th>
+                <td>
+                    <input type="number" name="rate_limit" value="<?php echo esc_attr( $settings['rate_limit'] ?? 60 ); ?>" min="10" max="500" />
+                    <p class="description"><?php esc_html_e( 'Maximum REST requests per minute from any single subsite. Default: 60.', 'zinckles-net-cart' ); ?></p>
+                </td>
+            </tr>
+            <tr>
+                <th><?php esc_html_e( 'IP Whitelist', 'zinckles-net-cart' ); ?></th>
+                <td>
+                    <textarea name="ip_whitelist" rows="4" cols="50" placeholder="One IP per line"><?php echo esc_textarea( $settings['ip_whitelist'] ?? '' ); ?></textarea>
+                    <p class="description"><?php esc_html_e( 'Optional. One IP address per line. Leave empty to allow all enrolled subsites.', 'zinckles-net-cart' ); ?></p>
+                </td>
+            </tr>
+        </table>
 
-        <div class="card" style="max-width:720px;margin-bottom:24px;">
-            <h2><?php _e( 'Request Validation', 'znc' ); ?></h2>
-
-            <table class="form-table">
-                <tr>
-                    <th><label for="znc-clock-skew"><?php _e( 'Clock Skew Tolerance', 'znc' ); ?></label></th>
-                    <td>
-                        <input type="number" id="znc-clock-skew"
-                               name="znc[rest_clock_skew]"
-                               value="<?php echo esc_attr( $settings['rest_clock_skew'] ); ?>"
-                               min="30" max="3600" step="30" class="small-text">
-                        <?php _e( 'seconds', 'znc' ); ?>
-                        <p class="description">
-                            <?php _e( 'Maximum time difference allowed between request timestamp and server time. Default: 300 (5 minutes).', 'znc' ); ?>
-                        </p>
-                    </td>
-                </tr>
-
-                <tr>
-                    <th><label for="znc-rate-limit"><?php _e( 'Rate Limit', 'znc' ); ?></label></th>
-                    <td>
-                        <input type="number" id="znc-rate-limit"
-                               name="znc[rest_rate_limit]"
-                               value="<?php echo esc_attr( $settings['rest_rate_limit'] ); ?>"
-                               min="10" max="1000" class="small-text">
-                        <?php _e( 'requests per minute per site', 'znc' ); ?>
-                        <p class="description">
-                            <?php _e( 'Maximum REST API requests allowed per minute from each enrolled subsite.', 'znc' ); ?>
-                        </p>
-                    </td>
-                </tr>
-
-                <tr>
-                    <th><label for="znc-ip-whitelist"><?php _e( 'IP Whitelist', 'znc' ); ?></label></th>
-                    <td>
-                        <textarea id="znc-ip-whitelist"
-                                  name="znc[rest_ip_whitelist]"
-                                  rows="3" class="large-text code"
-                                  placeholder="e.g. 192.168.1.100, 10.0.0.0/24"><?php echo esc_textarea( $settings['rest_ip_whitelist'] ); ?></textarea>
-                        <p class="description">
-                            <?php _e( 'Comma-separated list of allowed IP addresses or CIDR ranges. Leave empty to allow all IPs (HMAC verification still applies).', 'znc' ); ?>
-                        </p>
-                    </td>
-                </tr>
-            </table>
-        </div>
-
-        <?php submit_button( __( 'Save Security Settings', 'znc' ), 'primary', 'submit', true ); ?>
+        <p class="submit">
+            <button type="submit" id="znc-save-security" class="button button-primary"><?php esc_html_e( 'Save Security Settings', 'zinckles-net-cart' ); ?></button>
+            <span id="znc-security-status" style="margin-left:12px;"></span>
+        </p>
     </form>
 </div>
