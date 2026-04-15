@@ -6,7 +6,7 @@
  *              products from all enrolled subsites into a single checkout.
  *              wp_usermeta storage, MyCred + GamiPress + Tutor LMS integration,
  *              parent/child orders, 10 shortcodes, 5 widgets.
- * Version:     1.6.0
+ * Version:     1.6.1
  * Author:      Zinckles
  * Author URI:  https://zinckles.com
  * License:     GPL-2.0-or-later
@@ -32,7 +32,7 @@ if ( $znc_mem_limit && $znc_mem_limit !== '-1' ) {
     }
 }
 
-define( 'ZNC_VERSION',     '1.6.0' );
+define( 'ZNC_VERSION',     '1.6.1' );
 define( 'ZNC_PLUGIN_FILE', __FILE__ );
 define( 'ZNC_PLUGIN_DIR',  plugin_dir_path( __FILE__ ) );
 define( 'ZNC_PLUGIN_URL',  plugin_dir_url( __FILE__ ) );

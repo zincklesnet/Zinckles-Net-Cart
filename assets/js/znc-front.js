@@ -50,12 +50,26 @@
         });
     });
 
-    // Checkout redirect
+    /*
+     * Checkout redirect — v1.6.1 FIX:
+     * The "Proceed to Checkout" is an <a href="..."> link now.
+     * We do NOT intercept it with JS. If it's a plain link, let the
+     * browser navigate naturally. Only intervene for buttons without href.
+     */
     $(document).on('click', '.znc-btn-checkout', function(e){
-        var href = $(this).attr('href');
-        if (href && href !== '#') return; // let normal link work
+        var el = $(this);
+        var href = el.attr('href');
+        // If it's a real <a> with a real URL, let the browser handle it
+        if (el.is('a') && href && href !== '#' && href !== '') {
+            return true; // allow default navigation
+        }
+        // Only for <button> elements or <a href="#">
         e.preventDefault();
-        if (zncFront.checkoutUrl) window.location.href = zncFront.checkoutUrl;
+        if (zncFront.checkoutUrl) {
+            window.location.href = zncFront.checkoutUrl;
+        } else {
+            alert('Checkout URL not configured. Please set a Checkout Page in Net Cart settings.');
+        }
     });
 
     // Update cart badge on page load
