@@ -1,6 +1,6 @@
 <?php
 /**
- * Inventory Sync — v1.4.0
+ * Inventory Sync — v1.4.1
  * Checks stock availability on source subsites before checkout.
  */
 defined( 'ABSPATH' ) || exit;

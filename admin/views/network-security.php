@@ -1,6 +1,6 @@
 <?php
 /**
- * Network Security View — v1.4.0
+ * Network Security View — v1.4.1
  * HMAC secret, clock skew, rate limiting, IP whitelist.
  */
 defined( 'ABSPATH' ) || exit;

@@ -1,6 +1,6 @@
 <?php
 /**
- * Cart Sync — v1.4.0 NEW
+ * Cart Sync — v1.4.1 NEW
  *
  * Replaces the WooCommerce cart count in header/nav menus with
  * the global Net Cart count. Works on both checkout host and enrolled subsites.

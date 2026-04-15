@@ -1,6 +1,6 @@
 <?php
 /**
- * My Account — v1.4.0
+ * My Account — v1.4.1
  * Adds a "Net Cart Orders" tab to WooCommerce My Account on the main site.
  * Shows completed orders from all enrolled subsites with shop name, currency/point type.
  */

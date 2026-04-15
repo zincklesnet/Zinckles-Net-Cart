@@ -1,6 +1,6 @@
 <?php
 /**
- * Activator — v1.4.0
+ * Activator — v1.4.1
  * Creates DB tables and sets default options on network activation.
  */
 defined( 'ABSPATH' ) || exit;

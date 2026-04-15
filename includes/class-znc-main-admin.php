@@ -1,6 +1,6 @@
 <?php
 /**
- * Main Admin — v1.4.0
+ * Main Admin — v1.4.1
  * Admin page on the main/checkout-host site showing global cart stats.
  */
 defined( 'ABSPATH' ) || exit;

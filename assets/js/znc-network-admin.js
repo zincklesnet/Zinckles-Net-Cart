@@ -1,5 +1,5 @@
 /**
- * Zinckles Net Cart — Network Admin JS — v1.4.0
+ * Zinckles Net Cart — Network Admin JS — v1.4.1
  * Handles all AJAX operations for the network admin pages.
  */
 (function($) {

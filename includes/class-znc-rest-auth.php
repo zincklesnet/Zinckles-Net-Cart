@@ -1,6 +1,6 @@
 <?php
 /**
- * REST Auth — v1.4.0
+ * REST Auth — v1.4.1
  * HMAC-based authentication for cross-subsite REST API calls.
  */
 defined( 'ABSPATH' ) || exit;

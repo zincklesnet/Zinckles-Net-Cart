@@ -1,6 +1,6 @@
 <?php
 /**
- * Order Query — v1.4.0
+ * Order Query — v1.4.1
  * Queries WooCommerce orders across the multisite network for a user.
  */
 defined( 'ABSPATH' ) || exit;

@@ -1,6 +1,6 @@
 <?php
 /**
- * REST Endpoints — v1.4.0
+ * REST Endpoints — v1.4.1
  * Internal REST API for cross-subsite communication.
  */
 defined( 'ABSPATH' ) || exit;

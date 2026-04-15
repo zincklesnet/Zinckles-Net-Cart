@@ -1,6 +1,6 @@
 <?php
 /**
- * Currency Handler — v1.4.0
+ * Currency Handler — v1.4.1
  * Mixed-currency support and formatting.
  */
 defined( 'ABSPATH' ) || exit;

@@ -1,6 +1,6 @@
 <?php
 /**
- * Cart Snapshot — v1.4.0
+ * Cart Snapshot — v1.4.1
  *
  * FIXES:
  * - Added $wpdb->last_error logging on insert failure

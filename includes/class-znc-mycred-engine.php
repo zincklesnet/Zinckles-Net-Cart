@@ -1,6 +1,6 @@
 <?php
 /**
- * MyCred Engine — v1.4.0
+ * MyCred Engine — v1.4.1
  * Detects and manages all MyCred point types across the network.
  */
 defined( 'ABSPATH' ) || exit;

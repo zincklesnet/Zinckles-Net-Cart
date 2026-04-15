@@ -1,6 +1,6 @@
 <?php
 /**
- * Global Cart Merger — v1.4.0
+ * Global Cart Merger — v1.4.1
  * Merges items from multiple subsites, handles currency grouping.
  */
 defined( 'ABSPATH' ) || exit;

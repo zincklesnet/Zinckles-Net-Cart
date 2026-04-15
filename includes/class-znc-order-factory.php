@@ -1,6 +1,6 @@
 <?php
 /**
- * Order Factory — v1.4.0
+ * Order Factory — v1.4.1
  * Creates WC orders on subsites from global cart items.
  */
 defined( 'ABSPATH' ) || exit;

@@ -1,6 +1,6 @@
 <?php
 /**
- * Widgets — v1.4.0 NEW
+ * Widgets — v1.4.1 NEW
  *
  * Registers WordPress widgets and Elementor-compatible widgets for Net Cart.
  */

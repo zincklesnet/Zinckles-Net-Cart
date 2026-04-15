@@ -1,6 +1,6 @@
 <?php
 /**
- * Network Admin — v1.4.0
+ * Network Admin — v1.4.1
  *
  * CRITICAL FIX: AJAX handlers are registered via register_ajax_handlers()
  * which is called from the main plugin on ALL admin/ajax requests.
@@ -16,7 +16,7 @@ class ZNC_Network_Admin {
 
     /**
      * Register AJAX handlers — called on ALL admin/ajax requests.
-     * This is the v1.4.0 fix for enrollment/settings/security saves hanging.
+     * This is the v1.4.1 fix for enrollment/settings/security saves hanging.
      */
     public static function register_ajax_handlers() {
         add_action( 'wp_ajax_znc_toggle_enrollment',      array( __CLASS__, 'ajax_toggle_enrollment' ) );

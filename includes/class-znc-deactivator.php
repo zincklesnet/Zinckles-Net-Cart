@@ -1,6 +1,6 @@
 <?php
 /**
- * Deactivator — v1.4.0
+ * Deactivator — v1.4.1
  * Cleanup on plugin deactivation.
  */
 defined( 'ABSPATH' ) || exit;

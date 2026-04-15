@@ -1,6 +1,6 @@
 <?php
 /**
- * Per-Subsite Shop Settings — v1.4.0
+ * Per-Subsite Shop Settings — v1.4.1
  */
 defined( 'ABSPATH' ) || exit;
 

@@ -1,6 +1,6 @@
 <?php
 /**
- * Shortcodes — v1.4.0
+ * Shortcodes — v1.4.1
  *
  * Registers all Net Cart shortcodes with multiple variations.
  */

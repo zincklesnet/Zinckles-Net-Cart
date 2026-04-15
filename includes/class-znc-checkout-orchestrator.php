@@ -1,6 +1,6 @@
 <?php
 /**
- * Checkout Orchestrator — v1.4.0
+ * Checkout Orchestrator — v1.4.1
  * Splits global cart into per-subsite orders, manages payment flow.
  */
 defined( 'ABSPATH' ) || exit;
@@ -85,7 +85,7 @@ class ZNC_Checkout_Orchestrator {
             $order->set_currency( $group['items'][0]['currency'] ?? 'USD' );
             $order->calculate_totals();
             $order->update_status( 'processing', 'Order created via Zinckles Net Cart' );
-            $order->add_order_note( 'Global Cart checkout — Net Cart v1.4.0' );
+            $order->add_order_note( 'Global Cart checkout — Net Cart v1.4.1' );
             $order->update_meta_data( '_znc_global_order', 1 );
             $order->update_meta_data( '_znc_source_blog', get_main_site_id() );
             $order->save();

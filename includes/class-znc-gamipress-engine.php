@@ -1,6 +1,6 @@
 <?php
 /**
- * GamiPress Engine — v1.4.0 NEW
+ * GamiPress Engine — v1.4.1 NEW
  *
  * Detects all GamiPress point types across the multisite network,
  * provides balance checks, deductions, and refunds.

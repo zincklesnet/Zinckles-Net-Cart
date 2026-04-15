@@ -1,6 +1,6 @@
 <?php
 /**
- * Network Settings View — v1.4.0
+ * Network Settings View — v1.4.1
  * Full admin settings page with all options.
  */
 defined( 'ABSPATH' ) || exit;

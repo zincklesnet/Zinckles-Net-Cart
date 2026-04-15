@@ -1,5 +1,5 @@
 /**
- * Zinckles Net Cart — Front-End JS — v1.4.0
+ * Zinckles Net Cart — Front-End JS — v1.4.1
  * Handles cart interactions: remove item, quantity update, AJAX refresh.
  */
 (function($) {

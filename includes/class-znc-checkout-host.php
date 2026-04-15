@@ -1,6 +1,6 @@
 <?php
 /**
- * Checkout Host Resolver — v1.4.0
+ * Checkout Host Resolver — v1.4.1
  * Cached URL resolution, enrollment management, admin helpers.
  */
 defined( 'ABSPATH' ) || exit;

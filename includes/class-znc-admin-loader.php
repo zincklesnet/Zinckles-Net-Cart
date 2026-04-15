@@ -1,6 +1,6 @@
 <?php
 /**
- * Admin Loader — v1.4.0
+ * Admin Loader — v1.4.1
  * Conditionally loads admin pages based on context (main site, subsite, network).
  */
 defined( 'ABSPATH' ) || exit;

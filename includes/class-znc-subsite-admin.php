@@ -1,6 +1,6 @@
 <?php
 /**
- * Subsite Admin — v1.4.0
+ * Subsite Admin — v1.4.1
  * Admin notice and cart info page on enrolled subsites.
  */
 defined( 'ABSPATH' ) || exit;

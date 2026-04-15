@@ -1,6 +1,6 @@
 <?php
 /**
- * Global Cart Store — v1.4.0
+ * Global Cart Store — v1.4.1
  * CRUD for znc_global_cart table on the checkout-host blog.
  */
 defined( 'ABSPATH' ) || exit;

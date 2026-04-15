@@ -1,6 +1,6 @@
 <?php
 /**
- * Network Diagnostics View — v1.4.0
+ * Network Diagnostics View — v1.4.1
  * System info, global cart stats, health checks.
  */
 defined( 'ABSPATH' ) || exit;

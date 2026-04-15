@@ -5,7 +5,7 @@
  * Description: Unified multisite cart — aggregate WooCommerce products from multiple subsites
  *              into a single checkout with configurable checkout host, mixed currency support,
  *              MyCred/GamiPress integration, parent/child orders, inventory sync, widgets & shortcodes.
- * Version:     1.4.0
+ * Version:     1.4.1
  * Author:      Zinckles
  * Author URI:  https://zinckles.com
  * License:     GPL-2.0-or-later
@@ -32,11 +32,11 @@ if ( $znc_mem_limit && $znc_mem_limit !== '-1' ) {
 }
 
 /* ── Constants ────────────────────────────────────────────────── */
-define( 'ZNC_VERSION',     '1.4.0' );
+define( 'ZNC_VERSION',     '1.4.1' );
 define( 'ZNC_PLUGIN_FILE', __FILE__ );
 define( 'ZNC_PLUGIN_DIR',  plugin_dir_path( __FILE__ ) );
 define( 'ZNC_PLUGIN_URL',  plugin_dir_url( __FILE__ ) );
-define( 'ZNC_DB_VERSION',  '1.4.0' );
+define( 'ZNC_DB_VERSION',  '1.4.1' );
 
 /* ── Autoloader ───────────────────────────────────────────────── */
 require_once ZNC_PLUGIN_DIR . 'includes/class-znc-autoloader.php';
@@ -66,6 +66,17 @@ function znc_bootstrap() {
      */
     if ( is_admin() || wp_doing_ajax() ) {
         ZNC_Network_Admin::register_ajax_handlers();
+    }
+
+    /*
+     * ── FIX v1.4.1 — Admin asset loading ────────────────────────
+     * ZNC_Admin_Loader must initialize on ALL admin contexts
+     * (network admin, main site admin, subsite admin) so that
+     * CSS/JS loads on Net Cart pages and AJAX handlers can fire.
+     */
+    if ( is_admin() || is_network_admin() ) {
+        $admin_loader = new ZNC_Admin_Loader();
+        $admin_loader->init();
     }
 
     /* ── Network Admin menu pages ─────────────────────────────── */
@@ -113,7 +124,19 @@ function znc_bootstrap() {
     if ( $is_host ) {
         ZNC_Shortcodes::init( $checkout_host );
 
-        $store = new ZNC_Global_Cart_Store();
+        /*
+         * ── FIX v1.4.1 — Constructor argument mismatches ────────
+         *
+         * BUG #1: ZNC_Global_Cart_Store requires ZNC_Checkout_Host.
+         *         v1.4.0 passed ZERO arguments → fatal TypeError.
+         *
+         * BUG #2: ZNC_Checkout_Orchestrator expects (Store, Host).
+         *         v1.4.0 passed (Store, Merger, Currency, …) → fatal TypeError.
+         *
+         * BUG #3: ZNC_REST_Endpoints requires ZNC_REST_Auth.
+         *         v1.4.0 passed ZERO arguments AND created $auth AFTER $rest.
+         */
+        $store = new ZNC_Global_Cart_Store( $checkout_host );  // FIX #1: was new ZNC_Global_Cart_Store()
         $store->init();
 
         $currency = new ZNC_Currency_Handler();
@@ -125,7 +148,7 @@ function znc_bootstrap() {
         $gamipress = new ZNC_GamiPress_Engine();
         $gamipress->init();
 
-        $merger = new ZNC_Global_Cart_Merger( $store, $currency );
+        $merger = new ZNC_Global_Cart_Merger( $store );  // FIX: removed unused $currency arg
         $merger->init();
 
         $inventory = new ZNC_Inventory_Sync();
@@ -134,7 +157,7 @@ function znc_bootstrap() {
         $orders = new ZNC_Order_Factory();
         $orders->init();
 
-        $checkout = new ZNC_Checkout_Orchestrator( $store, $merger, $currency, $mycred, $orders, $inventory );
+        $checkout = new ZNC_Checkout_Orchestrator( $store, $checkout_host );  // FIX #2: was ($store, $merger, $currency, $mycred, $orders, $inventory)
         $checkout->init();
 
         $my_account = new ZNC_My_Account( $checkout_host );
@@ -151,11 +174,11 @@ function znc_bootstrap() {
 
     /* ── REST endpoints — all enrolled sites + host ───────────── */
     if ( $is_host || $is_enrolled ) {
-        $rest = new ZNC_REST_Endpoints();
-        $rest->init();
-
-        $auth = new ZNC_REST_Auth();
+        $auth = new ZNC_REST_Auth();       // FIX #3: moved BEFORE $rest
         $auth->init();
+
+        $rest = new ZNC_REST_Endpoints( $auth );  // FIX #3: was new ZNC_REST_Endpoints()
+        $rest->init();
     }
 
     /* ── Admin Bar — uses CACHED URLs ─────────────────────────── */

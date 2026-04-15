@@ -1,6 +1,6 @@
 <?php
 /**
- * My Account Redirect — v1.4.0
+ * My Account Redirect — v1.4.1
  * Redirects My Account pages on enrolled subsites to the main checkout host site.
  */
 defined( 'ABSPATH' ) || exit;

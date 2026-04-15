@@ -1,6 +1,6 @@
 <?php
 /**
- * Network Subsites View — v1.4.0
+ * Network Subsites View — v1.4.1
  * Enrollment management with AJAX enroll/remove.
  */
 defined( 'ABSPATH' ) || exit;
