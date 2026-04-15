@@ -2,11 +2,11 @@
 /**
  * Checkout Host — Resolves URLs for global cart and checkout pages.
  *
- * v1.7.0 FIX: Added singleton instance(), is_checkout_host() alias,
- *              and static proxy methods for get_cart_url / get_checkout_url
- *              so the bootstrap can call ZNC_Checkout_Host::instance(),
- *              $checkout_host->is_checkout_host(), and
- *              ZNC_Checkout_Host::get_checkout_url() without fatal errors.
+ * v1.7.1 EMERGENCY FIX:
+ *   - Added singleton instance() method
+ *   - Added is_checkout_host() alias for is_current_site_host()
+ *   - Added static proxy methods for get_cart_url() and get_checkout_url()
+ *     so the bootstrap can call ZNC_Checkout_Host::get_checkout_url() etc.
  *
  * @package ZincklesNetCart
  * @since   1.6.1
@@ -15,15 +15,11 @@ defined( 'ABSPATH' ) || exit;
 
 class ZNC_Checkout_Host {
 
-    /* ── Singleton ────────────────────────────────────────── */
-
+    /* ────────────────────────────────────────────
+     *  Singleton
+     * ──────────────────────────────────────────── */
     private static $instance = null;
 
-    /**
-     * Get the singleton instance.
-     *
-     * @return self
-     */
     public static function instance() {
         if ( null === self::$instance ) {
             self::$instance = new self();
@@ -31,199 +27,219 @@ class ZNC_Checkout_Host {
         return self::$instance;
     }
 
-    /* ── Internal state ───────────────────────────────────── */
-
+    /* ────────────────────────────────────────────
+     *  Internal state
+     * ──────────────────────────────────────────── */
     private $host_id = null;
     private $urls    = null;
 
-    /* ── Host ID ──────────────────────────────────────────── */
-
+    /* ────────────────────────────────────────────
+     *  Host ID resolution
+     * ──────────────────────────────────────────── */
     public function get_host_id() {
         if ( null !== $this->host_id ) {
             return $this->host_id;
         }
 
-        $s = get_site_option( 'znc_network_settings', array() );
-        $c = isset( $s['checkout_host_id'] ) ? absint( $s['checkout_host_id'] ) : 0;
+        $settings = get_site_option( 'znc_network_settings', array() );
+        $configured = isset( $settings['checkout_host_id'] ) ? absint( $settings['checkout_host_id'] ) : 0;
 
-        $this->host_id = ( $c > 0 && get_blog_details( $c ) ) ? $c : get_main_site_id();
+        if ( $configured > 0 && get_blog_details( $configured ) ) {
+            $this->host_id = $configured;
+        } else {
+            $this->host_id = get_main_site_id();
+        }
+
         return $this->host_id;
     }
 
-    /* ── Host checks ──────────────────────────────────────── */
-
-    /**
-     * Whether the CURRENT site is the checkout host.
-     * Alias kept for backward compat with v1.6.x callers.
-     */
+    /* ────────────────────────────────────────────
+     *  Host checks
+     * ──────────────────────────────────────────── */
     public function is_current_site_host() {
         return get_current_blog_id() === $this->get_host_id();
     }
 
-    /**
-     * Alias used by the v1.7.0 bootstrap.
-     */
+    /** Alias used by v1.7.x bootstrap */
     public function is_checkout_host() {
         return $this->is_current_site_host();
     }
 
-    public function is_host( $bid ) {
-        return absint( $bid ) === $this->get_host_id();
+    public function is_host( $blog_id ) {
+        return absint( $blog_id ) === $this->get_host_id();
     }
 
     public function get_host_url() {
         return get_home_url( $this->get_host_id() );
     }
 
-    /* ── URL resolution ───────────────────────────────────── */
-
+    /* ────────────────────────────────────────────
+     *  URL resolution (private)
+     * ──────────────────────────────────────────── */
     private function resolve_urls() {
         if ( null !== $this->urls ) {
             return $this->urls;
         }
 
-        $ck = 'znc_host_urls_' . $this->get_host_id();
-        $c  = get_site_transient( $ck );
-
-        if ( is_array( $c ) && ! empty( $c['cart'] ) && ! empty( $c['checkout'] ) ) {
-            $this->urls = $c;
+        $cache_key = 'znc_host_urls_' . $this->get_host_id();
+        $cached    = get_site_transient( $cache_key );
+        if ( is_array( $cached ) && ! empty( $cached['cart'] ) && ! empty( $cached['checkout'] ) ) {
+            $this->urls = $cached;
             return $this->urls;
         }
 
-        $hid = $this->get_host_id();
-        $cur = get_current_blog_id();
-        $sw  = ( $cur !== $hid );
+        $host_id     = $this->get_host_id();
+        $current_id  = get_current_blog_id();
+        $switched    = ( $current_id !== $host_id );
 
-        if ( $sw ) {
-            switch_to_blog( $hid );
+        if ( $switched ) {
+            switch_to_blog( $host_id );
         }
 
-        $s = get_site_option( 'znc_network_settings', array() );
-        $u = array();
+        $settings = get_site_option( 'znc_network_settings', array() );
+        $urls     = array();
 
-        /* ── Cart page ── */
-        $cart_page_id = absint( $s['cart_page_id'] ?? 0 );
+        // Cart page
+        $cart_page_id = absint( $settings['cart_page_id'] ?? 0 );
         if ( $cart_page_id && get_post_status( $cart_page_id ) === 'publish' ) {
-            $u['cart'] = get_permalink( $cart_page_id );
+            $urls['cart'] = get_permalink( $cart_page_id );
         } else {
             $page = get_page_by_path( 'cart-g' );
             if ( $page && $page->post_status === 'publish' ) {
-                $u['cart'] = get_permalink( $page->ID );
-                update_option( 'znc_cart_page_id', $page->ID );
+                $urls['cart'] = get_permalink( $page->ID );
             } else {
                 global $wpdb;
                 $found_id = $wpdb->get_var(
                     "SELECT ID FROM {$wpdb->posts}
-                     WHERE post_type = 'page'
-                       AND post_status = 'publish'
-                       AND post_content LIKE '%[znc_global_cart]%'
-                     LIMIT 1"
+                     WHERE post_type = 'page' AND post_status = 'publish'
+                     AND post_content LIKE '%[znc_global_cart]%' LIMIT 1"
                 );
                 if ( $found_id ) {
-                    $u['cart'] = get_permalink( $found_id );
-                    update_option( 'znc_cart_page_id', $found_id );
+                    $urls['cart'] = get_permalink( $found_id );
                 } else {
-                    $u['cart'] = home_url( '/cart-g/' );
+                    $urls['cart'] = home_url( '/cart-g/' );
                 }
             }
         }
 
-        /* ── Checkout page ── */
-        $checkout_page_id = absint( $s['checkout_page_id'] ?? 0 );
+        // Checkout page
+        $checkout_page_id = absint( $settings['checkout_page_id'] ?? 0 );
         if ( $checkout_page_id && get_post_status( $checkout_page_id ) === 'publish' ) {
-            $u['checkout'] = get_permalink( $checkout_page_id );
+            $urls['checkout'] = get_permalink( $checkout_page_id );
         } else {
             $page = get_page_by_path( 'checkout-g' );
             if ( $page && $page->post_status === 'publish' ) {
-                $u['checkout'] = get_permalink( $page->ID );
-                update_option( 'znc_checkout_page_id', $page->ID );
+                $urls['checkout'] = get_permalink( $page->ID );
             } else {
                 global $wpdb;
                 $found_id = $wpdb->get_var(
                     "SELECT ID FROM {$wpdb->posts}
-                     WHERE post_type = 'page'
-                       AND post_status = 'publish'
-                       AND post_content LIKE '%[znc_checkout]%'
-                     LIMIT 1"
+                     WHERE post_type = 'page' AND post_status = 'publish'
+                     AND post_content LIKE '%[znc_checkout]%' LIMIT 1"
                 );
                 if ( $found_id ) {
-                    $u['checkout'] = get_permalink( $found_id );
-                    update_option( 'znc_checkout_page_id', $found_id );
+                    $urls['checkout'] = get_permalink( $found_id );
                 } else {
-                    $u['checkout'] = home_url( '/checkout-g/' );
+                    $urls['checkout'] = home_url( '/checkout-g/' );
                 }
             }
         }
 
-        /* ── Account / Orders ── */
-        $u['account'] = function_exists( 'wc_get_page_permalink' )
-            ? wc_get_page_permalink( 'myaccount' )
-            : home_url( '/my-account/' );
+        // Account and Orders
+        if ( function_exists( 'wc_get_page_permalink' ) ) {
+            $urls['account'] = wc_get_page_permalink( 'myaccount' );
+        } else {
+            $urls['account'] = home_url( '/my-account/' );
+        }
+        $urls['orders'] = trailingslashit( $urls['account'] ) . 'orders/';
 
-        $u['orders'] = trailingslashit( $u['account'] ) . 'orders/';
-
-        if ( $sw ) {
+        if ( $switched ) {
             restore_current_blog();
         }
 
-        $this->urls = $u;
-        set_site_transient( $ck, $u, HOUR_IN_SECONDS );
+        $this->urls = $urls;
+        set_site_transient( $cache_key, $urls, HOUR_IN_SECONDS );
+
         return $this->urls;
     }
 
-    /* ── Instance URL getters ─────────────────────────────── */
-
+    /* ────────────────────────────────────────────
+     *  Instance URL getters
+     * ──────────────────────────────────────────── */
     public function get_cart_url() {
-        $u = $this->resolve_urls();
-        return $u['cart'];
+        $urls = $this->resolve_urls();
+        return $urls['cart'];
     }
 
     public function get_checkout_url() {
-        $u = $this->resolve_urls();
-        return $u['checkout'];
+        $urls = $this->resolve_urls();
+        return $urls['checkout'];
     }
 
     public function get_account_url() {
-        $u = $this->resolve_urls();
-        return $u['account'];
+        $urls = $this->resolve_urls();
+        return $urls['account'];
     }
 
     public function get_orders_url() {
-        $u = $this->resolve_urls();
-        return $u['orders'];
+        $urls = $this->resolve_urls();
+        return $urls['orders'];
     }
 
-    /* ── Cache flush ──────────────────────────────────────── */
+    /* ────────────────────────────────────────────
+     *  Static proxy — so bootstrap can call
+     *  ZNC_Checkout_Host::get_checkout_url()
+     *  without having an instance variable.
+     * ──────────────────────────────────────────── */
+    public static function __callStatic( $name, $arguments ) {
+        $allowed = array( 'get_cart_url', 'get_checkout_url', 'get_account_url', 'get_orders_url' );
 
+        if ( in_array( $name, $allowed, true ) ) {
+            $inst = self::instance();
+            return call_user_func_array( array( $inst, $name ), $arguments );
+        }
+
+        trigger_error(
+            'Call to undefined static method ZNC_Checkout_Host::' . esc_html( $name ) . '()',
+            E_USER_ERROR
+        );
+    }
+
+    /* ────────────────────────────────────────────
+     *  Cache flush
+     * ──────────────────────────────────────────── */
     public function flush_url_cache() {
         delete_site_transient( 'znc_host_urls_' . $this->get_host_id() );
         $this->urls = null;
     }
 
-    /* ── Enrolled shops ───────────────────────────────────── */
-
+    /* ────────────────────────────────────────────
+     *  Enrolled shops
+     * ──────────────────────────────────────────── */
     public function get_enrolled_shop_ids() {
-        $s = get_site_option( 'znc_network_settings', array() );
-        $e = (array) ( $s['enrolled_sites'] ?? array() );
-        $b = (array) ( $s['blocked_sites']  ?? array() );
-        $h = $this->get_host_id();
+        $settings = get_site_option( 'znc_network_settings', array() );
+        $enrolled = (array) ( $settings['enrolled_sites'] ?? array() );
+        $blocked  = (array) ( $settings['blocked_sites']  ?? array() );
+        $host_id  = $this->get_host_id();
 
-        return array_values( array_filter( $e, function ( $id ) use ( $b, $h ) {
-            return absint( $id ) !== $h && ! in_array( absint( $id ), $b, true );
+        return array_values( array_filter( $enrolled, function ( $id ) use ( $blocked, $host_id ) {
+            $id = absint( $id );
+            return $id !== $host_id && ! in_array( $id, array_map( 'absint', $blocked ), true );
         } ) );
     }
 
-    /* ── Host info ────────────────────────────────────────── */
-
+    /* ────────────────────────────────────────────
+     *  Host info
+     * ──────────────────────────────────────────── */
     public function get_host_info() {
-        $h = $this->get_host_id();
-        $d = get_blog_details( $h );
+        $host_id = $this->get_host_id();
+        $details = get_blog_details( $host_id );
 
         return array(
-            'blog_id' => $h,
-            'name'    => $d ? $d->blogname : 'Main',
-            'url'     => $d ? $d->siteurl  : network_home_url(),
-            'is_main' => $h === get_main_site_id(),
+            'blog_id' => $host_id,
+            'name'    => $details ? $details->blogname : 'Main',
+            'url'     => $details ? $details->siteurl  : network_home_url(),
+            'is_main' => $host_id === get_main_site_id(),
         );
     }
 }
